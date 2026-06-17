@@ -223,10 +223,13 @@ from servicenow_mcp.tools.user_tools import (
     AddGroupMembersParams,
     CreateGroupParams,
     CreateUserParams,
+    DeleteGroupParams,
+    DeleteUserParams,
     GetUserParams,
     ListGroupsParams,
     ListUsersParams,
     RemoveGroupMembersParams,
+    SetPasswordParams,
     UpdateGroupParams,
     UpdateUserParams,
 )
@@ -238,6 +241,15 @@ from servicenow_mcp.tools.user_tools import (
 )
 from servicenow_mcp.tools.user_tools import (
     create_user as create_user_tool,
+)
+from servicenow_mcp.tools.user_tools import (
+    delete_group as delete_group_tool,
+)
+from servicenow_mcp.tools.user_tools import (
+    delete_user as delete_user_tool,
+)
+from servicenow_mcp.tools.user_tools import (
+    set_password as set_password_tool,
 )
 from servicenow_mcp.tools.user_tools import (
     get_user as get_user_tool,
@@ -887,6 +899,27 @@ def get_tool_definitions(
             Dict[str, Any],  # Expects dict
             "List groups from ServiceNow with optional filtering",
             "raw_dict",
+        ),
+        "set_password": (
+            set_password_tool,
+            SetPasswordParams,
+            str,
+            "Set (reset) a user's password in ServiceNow",
+            "str",
+        ),
+        "delete_user": (
+            delete_user_tool,
+            DeleteUserParams,
+            str,
+            "Delete a user in ServiceNow by sys_id, username, or email",
+            "str",
+        ),
+        "delete_group": (
+            delete_group_tool,
+            DeleteGroupParams,
+            str,
+            "Delete a group in ServiceNow by sys_id or name",
+            "str",
         ),
         # Story Management Tools
         "create_story": (

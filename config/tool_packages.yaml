@@ -127,12 +127,15 @@ system_administrator:
   - update_user
   - get_user
   - list_users
+  - set_password
+  - delete_user
   # Group Management
   - create_group
   - update_group
   - list_groups
   - add_group_members
   - remove_group_members
+  - delete_group
 
 full:
   # Incident Management
@@ -212,11 +215,14 @@ full:
   - update_user
   - get_user
   - list_users
+  - set_password
+  - delete_user
   - create_group
   - update_group
   - add_group_members
   - remove_group_members
   - list_groups
+  - delete_group
   # Story Management
   - create_story
   - update_story
