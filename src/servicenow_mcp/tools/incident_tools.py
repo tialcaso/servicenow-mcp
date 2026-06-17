@@ -21,30 +21,54 @@ class CreateIncidentParams(BaseModel):
 
     short_description: str = Field(..., description="Short description of the incident")
     description: Optional[str] = Field(None, description="Detailed description of the incident")
-    caller_id: Optional[str] = Field(None, description="User who reported the incident")
+    caller_id: Optional[str] = Field(
+        None, description="User who reported the incident (sys_id, username, name, or email)"
+    )
+    channel: Optional[str] = Field(
+        None,
+        description="Channel / contact type, e.g. email, phone, chat, self-service, walk-in, "
+        "virtual_agent",
+    )
     category: Optional[str] = Field(None, description="Category of the incident")
     subcategory: Optional[str] = Field(None, description="Subcategory of the incident")
-    priority: Optional[str] = Field(None, description="Priority of the incident")
-    impact: Optional[str] = Field(None, description="Impact of the incident")
-    urgency: Optional[str] = Field(None, description="Urgency of the incident")
-    assigned_to: Optional[str] = Field(None, description="User assigned to the incident")
-    assignment_group: Optional[str] = Field(None, description="Group assigned to the incident")
+    priority: Optional[str] = Field(
+        None, description="Priority (usually auto-calculated from impact + urgency)"
+    )
+    impact: Optional[str] = Field(None, description="Impact of the incident (1 High, 2 Medium, 3 Low)")
+    urgency: Optional[str] = Field(None, description="Urgency of the incident (1 High, 2 Medium, 3 Low)")
+    assigned_to: Optional[str] = Field(
+        None, description="User assigned to the incident (sys_id, username, name, or email)"
+    )
+    assignment_group: Optional[str] = Field(
+        None, description="Group assigned to the incident (sys_id or group name)"
+    )
 
 
 class UpdateIncidentParams(BaseModel):
     """Parameters for updating an incident."""
 
-    incident_id: str = Field(..., description="Incident ID or sys_id")
+    incident_id: str = Field(..., description="Incident number or sys_id")
     short_description: Optional[str] = Field(None, description="Short description of the incident")
     description: Optional[str] = Field(None, description="Detailed description of the incident")
-    state: Optional[str] = Field(None, description="State of the incident")
+    state: Optional[str] = Field(
+        None, description="State code: 1 New, 2 In Progress, 3 On Hold, 6 Resolved, 7 Closed, 8 Canceled"
+    )
+    channel: Optional[str] = Field(
+        None, description="Channel / contact type, e.g. email, phone, chat, self-service, walk-in"
+    )
     category: Optional[str] = Field(None, description="Category of the incident")
     subcategory: Optional[str] = Field(None, description="Subcategory of the incident")
-    priority: Optional[str] = Field(None, description="Priority of the incident")
-    impact: Optional[str] = Field(None, description="Impact of the incident")
-    urgency: Optional[str] = Field(None, description="Urgency of the incident")
-    assigned_to: Optional[str] = Field(None, description="User assigned to the incident")
-    assignment_group: Optional[str] = Field(None, description="Group assigned to the incident")
+    priority: Optional[str] = Field(
+        None, description="Priority (usually auto-calculated from impact + urgency)"
+    )
+    impact: Optional[str] = Field(None, description="Impact of the incident (1 High, 2 Medium, 3 Low)")
+    urgency: Optional[str] = Field(None, description="Urgency of the incident (1 High, 2 Medium, 3 Low)")
+    assigned_to: Optional[str] = Field(
+        None, description="User assigned to the incident (sys_id, username, name, or email)"
+    )
+    assignment_group: Optional[str] = Field(
+        None, description="Group assigned to the incident (sys_id or group name)"
+    )
     work_notes: Optional[str] = Field(None, description="Work notes to add to the incident")
     close_notes: Optional[str] = Field(None, description="Close notes to add to the incident")
     close_code: Optional[str] = Field(None, description="Close code for the incident")
@@ -228,6 +252,46 @@ def _resolve_incident_sys_id(
     return result[0].get("sys_id"), None
 
 
+def _resolve_reference(
+    config: ServerConfig,
+    auth_manager: AuthManager,
+    table: str,
+    value: str,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Resolve a reference-field value to a sys_id.
+
+    Accepts a 32-char sys_id (returned as-is) or a human-friendly value: for
+    ``sys_user`` it matches name / user_name / email; for ``sys_user_group`` it
+    matches the group name. Returns ``(sys_id, error_message)``.
+    """
+    if len(value) == 32 and all(c in "0123456789abcdef" for c in value):
+        return value, None
+
+    if table == "sys_user":
+        query = f"name={value}^ORuser_name={value}^ORemail={value}"
+        label = "user"
+    else:
+        query = f"name={value}"
+        label = "group"
+
+    try:
+        response = requests.get(
+            f"{config.api_url}/table/{table}",
+            params={"sysparm_query": query, "sysparm_limit": 1, "sysparm_fields": "sys_id"},
+            headers=auth_manager.get_headers(),
+            timeout=config.timeout,
+        )
+        response.raise_for_status()
+    except requests.RequestException as e:
+        logger.error(f"Failed to resolve {label} '{value}': {e}")
+        return None, f"Failed to resolve {label} '{value}': {_error_detail(e)}"
+
+    result = response.json().get("result", [])
+    if not result:
+        return None, f"No {label} found matching '{value}'"
+    return result[0].get("sys_id"), None
+
+
 def create_incident(
     config: ServerConfig,
     auth_manager: AuthManager,
@@ -254,7 +318,12 @@ def create_incident(
     if params.description:
         data["description"] = params.description
     if params.caller_id:
-        data["caller_id"] = params.caller_id
+        sys_id, err = _resolve_reference(config, auth_manager, "sys_user", params.caller_id)
+        if err:
+            return IncidentResponse(success=False, message=err)
+        data["caller_id"] = sys_id
+    if params.channel:
+        data["contact_type"] = params.channel
     if params.category:
         data["category"] = params.category
     if params.subcategory:
@@ -266,9 +335,15 @@ def create_incident(
     if params.urgency:
         data["urgency"] = params.urgency
     if params.assigned_to:
-        data["assigned_to"] = params.assigned_to
+        sys_id, err = _resolve_reference(config, auth_manager, "sys_user", params.assigned_to)
+        if err:
+            return IncidentResponse(success=False, message=err)
+        data["assigned_to"] = sys_id
     if params.assignment_group:
-        data["assignment_group"] = params.assignment_group
+        sys_id, err = _resolve_reference(config, auth_manager, "sys_user_group", params.assignment_group)
+        if err:
+            return IncidentResponse(success=False, message=err)
+        data["assignment_group"] = sys_id
 
     # Make request
     try:
@@ -328,6 +403,8 @@ def update_incident(
         data["description"] = params.description
     if params.state:
         data["state"] = params.state
+    if params.channel:
+        data["contact_type"] = params.channel
     if params.category:
         data["category"] = params.category
     if params.subcategory:
@@ -339,9 +416,15 @@ def update_incident(
     if params.urgency:
         data["urgency"] = params.urgency
     if params.assigned_to:
-        data["assigned_to"] = params.assigned_to
+        ref_id, err = _resolve_reference(config, auth_manager, "sys_user", params.assigned_to)
+        if err:
+            return IncidentResponse(success=False, message=err)
+        data["assigned_to"] = ref_id
     if params.assignment_group:
-        data["assignment_group"] = params.assignment_group
+        ref_id, err = _resolve_reference(config, auth_manager, "sys_user_group", params.assignment_group)
+        if err:
+            return IncidentResponse(success=False, message=err)
+        data["assignment_group"] = ref_id
     if params.work_notes:
         data["work_notes"] = params.work_notes
     if params.close_notes:
@@ -534,9 +617,11 @@ def list_incidents(
         filters.append(f"category={params.category}")
     if params.query:
         filters.append(f"short_descriptionLIKE{params.query}^ORdescriptionLIKE{params.query}")
-    
-    if filters:
-        query_params["sysparm_query"] = "^".join(filters)
+
+    # Return newest incidents first so recently-created ones are not paged out.
+    query = "^".join(filters)
+    query = f"{query}^ORDERBYDESCsys_created_on" if query else "ORDERBYDESCsys_created_on"
+    query_params["sysparm_query"] = query
     
     # Make request
     try:

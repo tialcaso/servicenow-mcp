@@ -6,12 +6,14 @@ import requests
 
 from servicenow_mcp.tools.incident_tools import (
     CloseIncidentParams,
+    CreateIncidentParams,
     DeleteIncidentParams,
     GetIncidentByNumberParams,
     GetIncidentParams,
     ReopenIncidentParams,
     ResolveIncidentParams,
     close_incident,
+    create_incident,
     delete_incident,
     get_incident,
     get_incident_by_number,
@@ -215,6 +217,40 @@ class TestIncidentTools(unittest.TestCase):
         sent = mock_put.call_args.kwargs["json"]
         self.assertEqual(sent["state"], "2")
         self.assertEqual(sent["work_notes"], "needs more work")
+
+    @patch('requests.post')
+    def test_create_incident_sets_channel(self, mock_post):
+        """channel maps to the ServiceNow contact_type field."""
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {"result": {"sys_id": SYS_ID, "number": "INC0010001"}}
+        mock_post.return_value = mock_response
+
+        result = create_incident(self.config, self.auth_manager, CreateIncidentParams(
+            short_description="x", channel="phone"))
+
+        self.assertTrue(result.success)
+        self.assertEqual(mock_post.call_args.kwargs["json"]["contact_type"], "phone")
+
+    @patch('requests.post')
+    @patch('requests.get')
+    def test_create_incident_resolves_caller_by_name(self, mock_get, mock_post):
+        """A non-sys_id caller is resolved to a sys_id via a sys_user lookup."""
+        lookup = MagicMock()
+        lookup.status_code = 200
+        lookup.json.return_value = {"result": [{"sys_id": "62826bf03710200044e0bfc8bcbe5df1"}]}
+        mock_get.return_value = lookup
+        created = MagicMock()
+        created.status_code = 201
+        created.json.return_value = {"result": {"sys_id": SYS_ID, "number": "INC0010001"}}
+        mock_post.return_value = created
+
+        result = create_incident(self.config, self.auth_manager, CreateIncidentParams(
+            short_description="x", caller_id="Abel Tuter"))
+
+        self.assertTrue(result.success)
+        self.assertIn("sys_user", mock_get.call_args.args[0])  # looked up a user
+        self.assertEqual(mock_post.call_args.kwargs["json"]["caller_id"], "62826bf03710200044e0bfc8bcbe5df1")
 
 
 if __name__ == '__main__':

@@ -62,14 +62,21 @@ Creates a new incident in ServiceNow.
 **Parameters:**
 - `short_description` (string, required): Short description of the incident
 - `description` (string, optional): Detailed description of the incident
-- `caller_id` (string, optional): User who reported the incident
+- `caller_id` (string, optional): Caller — accepts a sys_id, username, full name, or email
+- `channel` (string, optional): Channel / contact type — `email`, `phone`, `chat`, `self-service`, `walk-in`, `virtual_agent`
 - `category` (string, optional): Category of the incident
 - `subcategory` (string, optional): Subcategory of the incident
-- `priority` (string, optional): Priority of the incident
-- `impact` (string, optional): Impact of the incident
-- `urgency` (string, optional): Urgency of the incident
-- `assigned_to` (string, optional): User assigned to the incident
-- `assignment_group` (string, optional): Group assigned to the incident
+- `priority` (string, optional): Priority — usually **auto-calculated** from `impact` × `urgency`, so prefer setting those
+- `impact` (string, optional): Impact (`1` High, `2` Medium, `3` Low)
+- `urgency` (string, optional): Urgency (`1` High, `2` Medium, `3` Low)
+- `assigned_to` (string, optional): Assignee — accepts a sys_id, username, full name, or email
+- `assignment_group` (string, optional): Assignment group — accepts a sys_id or group name
+
+> **Reference fields** (`caller_id`, `assigned_to`, `assignment_group`) accept a
+> human name and are resolved to a sys_id automatically. **Priority** is derived
+> from impact × urgency by ServiceNow; setting it directly is usually overridden.
+> Note: some instances enforce that an `assigned_to` user belongs to the
+> `assignment_group` when both are set in the same update.
 
 **Example:**
 ```python
@@ -90,10 +97,11 @@ Updates an existing incident in ServiceNow.
 **Tool Name:** `update_incident`
 
 **Parameters:**
-- `incident_id` (string, required): Incident ID or sys_id
+- `incident_id` (string, required): Incident number or sys_id
 - `short_description` (string, optional): Short description of the incident
 - `description` (string, optional): Detailed description of the incident
-- `state` (string, optional): State of the incident
+- `state` (string, optional): State code (`1` New, `2` In Progress, `3` On Hold, `6` Resolved, `7` Closed, `8` Canceled)
+- `channel` (string, optional): Channel / contact type (`email`, `phone`, `chat`, `self-service`, `walk-in`)
 - `category` (string, optional): Category of the incident
 - `subcategory` (string, optional): Subcategory of the incident
 - `priority` (string, optional): Priority of the incident
