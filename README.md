@@ -1,12 +1,6 @@
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/osomai-servicenow-mcp-badge.png)](https://mseep.ai/app/osomai-servicenow-mcp)
-
 # ServiceNow MCP Server
 
 A Model Completion Protocol (MCP) server implementation for ServiceNow, allowing Claude to interact with ServiceNow instances.
-
-<a href="https://glama.ai/mcp/servers/@osomai/servicenow-mcp">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@osomai/servicenow-mcp/badge" alt="ServiceNow Server MCP server" />
-</a>
 
 ## Overview
 
