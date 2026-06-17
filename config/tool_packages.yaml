@@ -69,6 +69,7 @@ knowledge_author:
   - publish_article
   - list_articles
   - get_article
+  - delete_article
 
 platform_developer:
   # Script Includes
@@ -85,6 +86,7 @@ platform_developer:
   - activate_workflow
   - deactivate_workflow
   - list_workflow_versions
+  - delete_workflow
   # Workflow Activities
   - add_workflow_activity
   - update_workflow_activity
@@ -186,6 +188,7 @@ full:
   - update_workflow_activity
   - delete_workflow_activity
   - reorder_workflow_activities
+  - delete_workflow
   # Changeset
   - list_changesets
   - get_changeset_details
@@ -210,6 +213,7 @@ full:
   - publish_article
   - list_articles
   - get_article
+  - delete_article
   # User Management
   - create_user
   - update_user

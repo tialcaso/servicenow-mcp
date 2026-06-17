@@ -161,11 +161,15 @@ from servicenow_mcp.tools.incident_tools import (
 from servicenow_mcp.tools.knowledge_base import (
     CreateArticleParams,
     CreateKnowledgeBaseParams,
+    DeleteArticleParams,
     GetArticleParams,
     ListArticlesParams,
     ListKnowledgeBasesParams,
     PublishArticleParams,
     UpdateArticleParams,
+)
+from servicenow_mcp.tools.knowledge_base import (
+    delete_article as delete_article_tool,
 )
 from servicenow_mcp.tools.knowledge_base import (
     CreateCategoryParams as CreateKBCategoryParams,  # Aliased
@@ -275,6 +279,7 @@ from servicenow_mcp.tools.workflow_tools import (
     CreateWorkflowParams,
     DeactivateWorkflowParams,
     DeleteWorkflowActivityParams,
+    DeleteWorkflowParams,
     GetWorkflowActivitiesParams,
     GetWorkflowDetailsParams,
     ListWorkflowsParams,
@@ -285,6 +290,9 @@ from servicenow_mcp.tools.workflow_tools import (
 )
 from servicenow_mcp.tools.workflow_tools import (
     activate_workflow as activate_workflow_tool,
+)
+from servicenow_mcp.tools.workflow_tools import (
+    delete_workflow as delete_workflow_tool,
 )
 from servicenow_mcp.tools.workflow_tools import (
     add_workflow_activity as add_workflow_activity_tool,
@@ -684,6 +692,13 @@ def get_tool_definitions(
             "Reorder activities in a workflow",
             "str",  # Tool returns simple message
         ),
+        "delete_workflow": (
+            delete_workflow_tool,
+            DeleteWorkflowParams,
+            str,
+            "Delete a workflow in ServiceNow",
+            "json",
+        ),
         # Changeset Management Tools
         "list_changesets": (
             list_changesets_tool,
@@ -827,6 +842,13 @@ def get_tool_definitions(
             Dict[str, Any],  # Expects dict
             "Get a specific knowledge article by ID",
             "raw_dict",  # Tool returns raw dict
+        ),
+        "delete_article": (
+            delete_article_tool,
+            DeleteArticleParams,
+            str,
+            "Delete a knowledge article by number or sys_id",
+            "str",
         ),
         # Use the passed-in implementations for aliased KB category tools
         "list_categories": (
