@@ -5,7 +5,7 @@ This module provides tools for managing incidents in ServiceNow.
 """
 
 import logging
-from typing import Optional, List
+from typing import List, Optional, Tuple
 
 import requests
 from pydantic import BaseModel, Field
@@ -83,6 +83,39 @@ class GetIncidentByNumberParams(BaseModel):
     incident_number: str = Field(..., description="The number of the incident to fetch")
 
 
+class GetIncidentParams(BaseModel):
+    """Parameters for fetching a single incident by number or sys_id."""
+
+    incident_id: str = Field(..., description="Incident number (e.g. INC0010001) or sys_id")
+
+
+class DeleteIncidentParams(BaseModel):
+    """Parameters for deleting an incident."""
+
+    incident_id: str = Field(..., description="Incident number (e.g. INC0010001) or sys_id")
+
+
+class CloseIncidentParams(BaseModel):
+    """Parameters for closing an incident."""
+
+    incident_id: str = Field(..., description="Incident number (e.g. INC0010001) or sys_id")
+    close_code: str = Field(
+        ...,
+        description="Resolution/close code — must be one of the instance's configured choices "
+        "(e.g. 'Solution provided')",
+    )
+    close_notes: str = Field(..., description="Close notes describing the resolution")
+
+
+class ReopenIncidentParams(BaseModel):
+    """Parameters for reopening a resolved/closed incident."""
+
+    incident_id: str = Field(..., description="Incident number (e.g. INC0010001) or sys_id")
+    reopen_notes: Optional[str] = Field(
+        None, description="Work note explaining why the incident is being reopened"
+    )
+
+
 class IncidentResponse(BaseModel):
     """Response from incident operations."""
 
@@ -90,6 +123,109 @@ class IncidentResponse(BaseModel):
     message: str = Field(..., description="Message describing the result")
     incident_id: Optional[str] = Field(None, description="ID of the affected incident")
     incident_number: Optional[str] = Field(None, description="Number of the affected incident")
+
+
+def _error_detail(exc: requests.RequestException) -> str:
+    """Extract a useful message from a ServiceNow error response, if present.
+
+    ServiceNow returns errors as ``{"error": {"message": ..., "detail": ...}}``.
+    The default ``str(exception)`` only shows the HTTP status (e.g. "403 Client
+    Error: Forbidden"), hiding the real reason — for example
+    "Data Policy Exception: The following fields are mandatory: Resolution code".
+    Surfacing that detail is what makes failed incident operations debuggable.
+    """
+    resp = getattr(exc, "response", None)
+    if resp is None:
+        return str(exc)
+    detail = ""
+    try:
+        err = resp.json().get("error", {})
+        detail = " - ".join(str(p).strip() for p in (err.get("message"), err.get("detail")) if p)
+    except ValueError:
+        detail = (resp.text or "").strip()[:300]
+
+    message = f"HTTP {resp.status_code}"
+    if detail:
+        message += f": {detail}"
+    # Auth problems otherwise look identical to every other failure; nudge the user.
+    if resp.status_code == 401 or (resp.status_code == 403 and not detail):
+        message += (
+            " (verify SERVICENOW_USERNAME/SERVICENOW_PASSWORD and that the account "
+            "has the required role and ACLs on this record)"
+        )
+    return message
+
+
+def _field(value):
+    """Extract ``(raw_value, display_value)`` from a Table API field.
+
+    With ``sysparm_display_value=all`` every field is returned as
+    ``{"value": ..., "display_value": ...}``. For flat responses (mocks, or
+    ``display_value`` false/true) both elements are the same scalar.
+    """
+    if isinstance(value, dict):
+        return value.get("value"), value.get("display_value")
+    return value, value
+
+
+def _format_incident(incident_data: dict) -> dict:
+    """Build the incident dict returned by the read tools.
+
+    Coded fields (``state``, ``priority``) are returned as their raw codes — the
+    values that ``update_incident``/filters expect — with the human-readable
+    label alongside as ``*_display``.
+    """
+    state_value, state_display = _field(incident_data.get("state"))
+    priority_value, priority_display = _field(incident_data.get("priority"))
+    _, assigned_to = _field(incident_data.get("assigned_to"))
+
+    return {
+        "sys_id": _field(incident_data.get("sys_id"))[0],
+        "number": _field(incident_data.get("number"))[0],
+        "short_description": _field(incident_data.get("short_description"))[0],
+        "description": _field(incident_data.get("description"))[0],
+        "state": state_value,
+        "state_display": state_display,
+        "priority": priority_value,
+        "priority_display": priority_display,
+        "assigned_to": assigned_to,
+        "category": _field(incident_data.get("category"))[0],
+        "subcategory": _field(incident_data.get("subcategory"))[0],
+        "created_on": _field(incident_data.get("sys_created_on"))[0],
+        "updated_on": _field(incident_data.get("sys_updated_on"))[0],
+    }
+
+
+def _resolve_incident_sys_id(
+    config: ServerConfig,
+    auth_manager: AuthManager,
+    incident_id: str,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Resolve an incident number or sys_id to a sys_id.
+
+    Returns a ``(sys_id, error_message)`` tuple where exactly one element is set.
+    A 32-char hex string is treated as a sys_id; anything else is looked up by
+    ``number=``.
+    """
+    if len(incident_id) == 32 and all(c in "0123456789abcdef" for c in incident_id):
+        return incident_id, None
+
+    try:
+        response = requests.get(
+            f"{config.api_url}/table/incident",
+            params={"sysparm_query": f"number={incident_id}", "sysparm_limit": 1},
+            headers=auth_manager.get_headers(),
+            timeout=config.timeout,
+        )
+        response.raise_for_status()
+    except requests.RequestException as e:
+        logger.error(f"Failed to find incident: {e}")
+        return None, f"Failed to find incident: {_error_detail(e)}"
+
+    result = response.json().get("result", [])
+    if not result:
+        return None, f"Incident not found: {incident_id}"
+    return result[0].get("sys_id"), None
 
 
 def create_incident(
@@ -157,7 +293,7 @@ def create_incident(
         logger.error(f"Failed to create incident: {e}")
         return IncidentResponse(
             success=False,
-            message=f"Failed to create incident: {str(e)}",
+            message=f"Failed to create incident: {_error_detail(e)}",
         )
 
 
@@ -177,45 +313,11 @@ def update_incident(
     Returns:
         Response with the updated incident details.
     """
-    # Determine if incident_id is a number or sys_id
-    incident_id = params.incident_id
-    if len(incident_id) == 32 and all(c in "0123456789abcdef" for c in incident_id):
-        # This is likely a sys_id
-        api_url = f"{config.api_url}/table/incident/{incident_id}"
-    else:
-        # This is likely an incident number
-        # First, we need to get the sys_id
-        try:
-            query_url = f"{config.api_url}/table/incident"
-            query_params = {
-                "sysparm_query": f"number={incident_id}",
-                "sysparm_limit": 1,
-            }
-
-            response = requests.get(
-                query_url,
-                params=query_params,
-                headers=auth_manager.get_headers(),
-                timeout=config.timeout,
-            )
-            response.raise_for_status()
-
-            result = response.json().get("result", [])
-            if not result:
-                return IncidentResponse(
-                    success=False,
-                    message=f"Incident not found: {incident_id}",
-                )
-
-            incident_id = result[0].get("sys_id")
-            api_url = f"{config.api_url}/table/incident/{incident_id}"
-
-        except requests.RequestException as e:
-            logger.error(f"Failed to find incident: {e}")
-            return IncidentResponse(
-                success=False,
-                message=f"Failed to find incident: {str(e)}",
-            )
+    # Resolve incident number/sys_id to a sys_id
+    sys_id, error = _resolve_incident_sys_id(config, auth_manager, params.incident_id)
+    if error:
+        return IncidentResponse(success=False, message=error)
+    api_url = f"{config.api_url}/table/incident/{sys_id}"
 
     # Build request data
     data = {}
@@ -270,7 +372,7 @@ def update_incident(
         logger.error(f"Failed to update incident: {e}")
         return IncidentResponse(
             success=False,
-            message=f"Failed to update incident: {str(e)}",
+            message=f"Failed to update incident: {_error_detail(e)}",
         )
 
 
@@ -290,45 +392,11 @@ def add_comment(
     Returns:
         Response with the result of the operation.
     """
-    # Determine if incident_id is a number or sys_id
-    incident_id = params.incident_id
-    if len(incident_id) == 32 and all(c in "0123456789abcdef" for c in incident_id):
-        # This is likely a sys_id
-        api_url = f"{config.api_url}/table/incident/{incident_id}"
-    else:
-        # This is likely an incident number
-        # First, we need to get the sys_id
-        try:
-            query_url = f"{config.api_url}/table/incident"
-            query_params = {
-                "sysparm_query": f"number={incident_id}",
-                "sysparm_limit": 1,
-            }
-
-            response = requests.get(
-                query_url,
-                params=query_params,
-                headers=auth_manager.get_headers(),
-                timeout=config.timeout,
-            )
-            response.raise_for_status()
-
-            result = response.json().get("result", [])
-            if not result:
-                return IncidentResponse(
-                    success=False,
-                    message=f"Incident not found: {incident_id}",
-                )
-
-            incident_id = result[0].get("sys_id")
-            api_url = f"{config.api_url}/table/incident/{incident_id}"
-
-        except requests.RequestException as e:
-            logger.error(f"Failed to find incident: {e}")
-            return IncidentResponse(
-                success=False,
-                message=f"Failed to find incident: {str(e)}",
-            )
+    # Resolve incident number/sys_id to a sys_id
+    sys_id, error = _resolve_incident_sys_id(config, auth_manager, params.incident_id)
+    if error:
+        return IncidentResponse(success=False, message=error)
+    api_url = f"{config.api_url}/table/incident/{sys_id}"
 
     # Build request data
     data = {}
@@ -361,7 +429,7 @@ def add_comment(
         logger.error(f"Failed to add comment: {e}")
         return IncidentResponse(
             success=False,
-            message=f"Failed to add comment: {str(e)}",
+            message=f"Failed to add comment: {_error_detail(e)}",
         )
 
 
@@ -381,52 +449,23 @@ def resolve_incident(
     Returns:
         Response with the result of the operation.
     """
-    # Determine if incident_id is a number or sys_id
-    incident_id = params.incident_id
-    if len(incident_id) == 32 and all(c in "0123456789abcdef" for c in incident_id):
-        # This is likely a sys_id
-        api_url = f"{config.api_url}/table/incident/{incident_id}"
-    else:
-        # This is likely an incident number
-        # First, we need to get the sys_id
-        try:
-            query_url = f"{config.api_url}/table/incident"
-            query_params = {
-                "sysparm_query": f"number={incident_id}",
-                "sysparm_limit": 1,
-            }
+    # Resolve incident number/sys_id to a sys_id
+    sys_id, error = _resolve_incident_sys_id(config, auth_manager, params.incident_id)
+    if error:
+        return IncidentResponse(success=False, message=error)
+    api_url = f"{config.api_url}/table/incident/{sys_id}"
 
-            response = requests.get(
-                query_url,
-                params=query_params,
-                headers=auth_manager.get_headers(),
-                timeout=config.timeout,
-            )
-            response.raise_for_status()
-
-            result = response.json().get("result", [])
-            if not result:
-                return IncidentResponse(
-                    success=False,
-                    message=f"Incident not found: {incident_id}",
-                )
-
-            incident_id = result[0].get("sys_id")
-            api_url = f"{config.api_url}/table/incident/{incident_id}"
-
-        except requests.RequestException as e:
-            logger.error(f"Failed to find incident: {e}")
-            return IncidentResponse(
-                success=False,
-                message=f"Failed to find incident: {str(e)}",
-            )
-
-    # Build request data
+    # Build request data.
+    # NOTE: do NOT send resolved_at — ServiceNow sets resolved_at/resolved_by
+    # automatically when state moves to Resolved. Sending the literal "now" is
+    # not a valid datetime and is silently dropped by the Table API.
+    # close_code must be one of the instance's configured "Resolution code"
+    # choices (e.g. "Solution provided"); an invalid value is dropped, which
+    # then trips the mandatory-field Data Policy and returns HTTP 403.
     data = {
         "state": "6",  # Resolved
         "close_code": params.resolution_code,
         "close_notes": params.resolution_notes,
-        "resolved_at": "now",
     }
 
     # Make request
@@ -452,7 +491,7 @@ def resolve_incident(
         logger.error(f"Failed to resolve incident: {e}")
         return IncidentResponse(
             success=False,
-            message=f"Failed to resolve incident: {str(e)}",
+            message=f"Failed to resolve incident: {_error_detail(e)}",
         )
 
 
@@ -474,14 +513,17 @@ def list_incidents(
     """
     api_url = f"{config.api_url}/table/incident"
 
-    # Build query parameters
+    # Build query parameters.
+    # display_value=all returns both raw codes and display labels for every
+    # field, so callers get the code (for round-tripping into update/filters)
+    # and the human-readable label together.
     query_params = {
         "sysparm_limit": params.limit,
         "sysparm_offset": params.offset,
-        "sysparm_display_value": "true",
+        "sysparm_display_value": "all",
         "sysparm_exclude_reference_link": "true",
     }
-    
+
     # Add filters
     filters = []
     if params.state:
@@ -507,29 +549,8 @@ def list_incidents(
         response.raise_for_status()
         
         data = response.json()
-        incidents = []
-        
-        for incident_data in data.get("result", []):
-            # Handle assigned_to field which could be a string or a dictionary
-            assigned_to = incident_data.get("assigned_to")
-            if isinstance(assigned_to, dict):
-                assigned_to = assigned_to.get("display_value")
-            
-            incident = {
-                "sys_id": incident_data.get("sys_id"),
-                "number": incident_data.get("number"),
-                "short_description": incident_data.get("short_description"),
-                "description": incident_data.get("description"),
-                "state": incident_data.get("state"),
-                "priority": incident_data.get("priority"),
-                "assigned_to": assigned_to,
-                "category": incident_data.get("category"),
-                "subcategory": incident_data.get("subcategory"),
-                "created_on": incident_data.get("sys_created_on"),
-                "updated_on": incident_data.get("sys_updated_on"),
-            }
-            incidents.append(incident)
-        
+        incidents = [_format_incident(item) for item in data.get("result", [])]
+
         return {
             "success": True,
             "message": f"Found {len(incidents)} incidents",
@@ -540,7 +561,7 @@ def list_incidents(
         logger.error(f"Failed to list incidents: {e}")
         return {
             "success": False,
-            "message": f"Failed to list incidents: {str(e)}",
+            "message": f"Failed to list incidents: {_error_detail(e)}",
             "incidents": []
         }
 
@@ -567,7 +588,7 @@ def get_incident_by_number(
     query_params = {
         "sysparm_query": f"number={params.incident_number}",
         "sysparm_limit": 1,
-        "sysparm_display_value": "true",
+        "sysparm_display_value": "all",
         "sysparm_exclude_reference_link": "true",
     }
 
@@ -590,34 +611,214 @@ def get_incident_by_number(
                 "message": f"Incident not found: {params.incident_number}",
             }
 
-        incident_data = result[0]
-        assigned_to = incident_data.get("assigned_to")
-        if isinstance(assigned_to, dict):
-            assigned_to = assigned_to.get("display_value")
-
-        incident = {
-            "sys_id": incident_data.get("sys_id"),
-            "number": incident_data.get("number"),
-            "short_description": incident_data.get("short_description"),
-            "description": incident_data.get("description"),
-            "state": incident_data.get("state"),
-            "priority": incident_data.get("priority"),
-            "assigned_to": assigned_to,
-            "category": incident_data.get("category"),
-            "subcategory": incident_data.get("subcategory"),
-            "created_on": incident_data.get("sys_created_on"),
-            "updated_on": incident_data.get("sys_updated_on"),
-        }
-
         return {
             "success": True,
             "message": f"Incident {params.incident_number} found",
-            "incident": incident,
+            "incident": _format_incident(result[0]),
         }
 
     except requests.RequestException as e:
         logger.error(f"Failed to fetch incident: {e}")
         return {
             "success": False,
-            "message": f"Failed to fetch incident: {str(e)}",
+            "message": f"Failed to fetch incident: {_error_detail(e)}",
         }
+
+
+def get_incident(
+    config: ServerConfig,
+    auth_manager: AuthManager,
+    params: GetIncidentParams,
+) -> dict:
+    """
+    Fetch a single incident from ServiceNow by its number OR sys_id.
+
+    Args:
+        config: Server configuration.
+        auth_manager: Authentication manager.
+        params: Parameters identifying the incident (number or sys_id).
+
+    Returns:
+        Dictionary with the incident details.
+    """
+    sys_id, error = _resolve_incident_sys_id(config, auth_manager, params.incident_id)
+    if error:
+        return {"success": False, "message": error}
+
+    try:
+        response = requests.get(
+            f"{config.api_url}/table/incident/{sys_id}",
+            params={
+                "sysparm_display_value": "all",
+                "sysparm_exclude_reference_link": "true",
+            },
+            headers=auth_manager.get_headers(),
+            timeout=config.timeout,
+        )
+        response.raise_for_status()
+
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch incident: {e}")
+        return {
+            "success": False,
+            "message": f"Failed to fetch incident: {_error_detail(e)}",
+        }
+
+    incident_data = response.json().get("result", {})
+    if not incident_data:
+        return {"success": False, "message": f"Incident not found: {params.incident_id}"}
+
+    incident = _format_incident(incident_data)
+    return {
+        "success": True,
+        "message": f"Incident {incident.get('number')} found",
+        "incident": incident,
+    }
+
+
+def delete_incident(
+    config: ServerConfig,
+    auth_manager: AuthManager,
+    params: DeleteIncidentParams,
+) -> IncidentResponse:
+    """
+    Delete an incident in ServiceNow.
+
+    Args:
+        config: Server configuration.
+        auth_manager: Authentication manager.
+        params: Parameters identifying the incident (number or sys_id).
+
+    Returns:
+        Response with the result of the operation.
+    """
+    sys_id, error = _resolve_incident_sys_id(config, auth_manager, params.incident_id)
+    if error:
+        return IncidentResponse(success=False, message=error)
+
+    try:
+        response = requests.delete(
+            f"{config.api_url}/table/incident/{sys_id}",
+            headers=auth_manager.get_headers(),
+            timeout=config.timeout,
+        )
+        response.raise_for_status()
+
+    except requests.RequestException as e:
+        logger.error(f"Failed to delete incident: {e}")
+        return IncidentResponse(
+            success=False,
+            message=f"Failed to delete incident: {_error_detail(e)}",
+        )
+
+    # A successful DELETE returns HTTP 204 with no body.
+    return IncidentResponse(
+        success=True,
+        message="Incident deleted successfully",
+        incident_id=sys_id,
+    )
+
+
+def close_incident(
+    config: ServerConfig,
+    auth_manager: AuthManager,
+    params: CloseIncidentParams,
+) -> IncidentResponse:
+    """
+    Close an incident in ServiceNow (state = Closed).
+
+    Like resolving, closing is gated by a Data Policy that makes the resolution
+    code and close notes mandatory, so both are required parameters.
+
+    Args:
+        config: Server configuration.
+        auth_manager: Authentication manager.
+        params: Parameters for closing the incident.
+
+    Returns:
+        Response with the result of the operation.
+    """
+    sys_id, error = _resolve_incident_sys_id(config, auth_manager, params.incident_id)
+    if error:
+        return IncidentResponse(success=False, message=error)
+    api_url = f"{config.api_url}/table/incident/{sys_id}"
+
+    data = {
+        "state": "7",  # Closed
+        "close_code": params.close_code,
+        "close_notes": params.close_notes,
+    }
+
+    try:
+        response = requests.put(
+            api_url,
+            json=data,
+            headers=auth_manager.get_headers(),
+            timeout=config.timeout,
+        )
+        response.raise_for_status()
+
+        result = response.json().get("result", {})
+        return IncidentResponse(
+            success=True,
+            message="Incident closed successfully",
+            incident_id=result.get("sys_id"),
+            incident_number=result.get("number"),
+        )
+
+    except requests.RequestException as e:
+        logger.error(f"Failed to close incident: {e}")
+        return IncidentResponse(
+            success=False,
+            message=f"Failed to close incident: {_error_detail(e)}",
+        )
+
+
+def reopen_incident(
+    config: ServerConfig,
+    auth_manager: AuthManager,
+    params: ReopenIncidentParams,
+) -> IncidentResponse:
+    """
+    Reopen a resolved or closed incident (state = In Progress).
+
+    Args:
+        config: Server configuration.
+        auth_manager: Authentication manager.
+        params: Parameters for reopening the incident.
+
+    Returns:
+        Response with the result of the operation.
+    """
+    sys_id, error = _resolve_incident_sys_id(config, auth_manager, params.incident_id)
+    if error:
+        return IncidentResponse(success=False, message=error)
+    api_url = f"{config.api_url}/table/incident/{sys_id}"
+
+    data = {"state": "2"}  # In Progress
+    if params.reopen_notes:
+        data["work_notes"] = params.reopen_notes
+
+    try:
+        response = requests.put(
+            api_url,
+            json=data,
+            headers=auth_manager.get_headers(),
+            timeout=config.timeout,
+        )
+        response.raise_for_status()
+
+        result = response.json().get("result", {})
+        return IncidentResponse(
+            success=True,
+            message="Incident reopened successfully",
+            incident_id=result.get("sys_id"),
+            incident_number=result.get("number"),
+        )
+
+    except requests.RequestException as e:
+        logger.error(f"Failed to reopen incident: {e}")
+        return IncidentResponse(
+            success=False,
+            message=f"Failed to reopen incident: {_error_detail(e)}",
+        )

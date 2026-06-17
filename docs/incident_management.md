@@ -4,7 +4,7 @@ This document describes the incident management functionality provided by the Se
 
 ## Overview
 
-The incident management module allows LLMs to interact with ServiceNow incidents through the Model Context Protocol (MCP). It provides resources for querying incident data and tools for creating, updating, and resolving incidents.
+The incident management module allows LLMs to interact with ServiceNow incidents through the Model Context Protocol (MCP). It provides tools for the full incident lifecycle: creating, reading (by number or sys_id), listing/searching, updating, commenting, resolving, and deleting incidents.
 
 ## Resources
 
@@ -146,31 +146,116 @@ Resolves an incident in ServiceNow.
 **Tool Name:** `resolve_incident`
 
 **Parameters:**
-- `incident_id` (string, required): Incident ID or sys_id
-- `resolution_code` (string, required): Resolution code for the incident
+- `incident_id` (string, required): Incident number or sys_id
+- `resolution_code` (string, required): Resolution code — **must be one of the instance's configured "Resolution code" choices**
 - `resolution_notes` (string, required): Resolution notes for the incident
+
+This tool sets `state=6`, `close_code`, and `close_notes`. It does **not** send
+`resolved_at` — ServiceNow populates `resolved_at`/`resolved_by` automatically.
+
+> **Valid `resolution_code` values are instance-specific.** On a default
+> Personal Developer Instance they include: `Solution provided`,
+> `Workaround provided`, `Resolved by caller`, `Resolved by change`,
+> `Resolved by problem`, `Resolved by request`, `Known error`, `Duplicate`,
+> `User error`, `No resolution provided`. Sending a value that is not a
+> configured choice is silently dropped, which then trips the mandatory-field
+> Data Policy and the resolve fails with HTTP 403. To list the valid choices for
+> your instance, query `sys_choice` for `name=incident^element=close_code`.
 
 **Example:**
 ```python
 result = await mcp.use_tool("servicenow", "resolve_incident", {
     "incident_id": "INC0010001",
-    "resolution_code": "Solved (Permanently)",
+    "resolution_code": "Solution provided",
     "resolution_notes": "The email service has been restored."
 })
 
 print(f"Incident resolved: {result.success}")
 ```
 
+### Get Incident
+
+Retrieves a single incident by **number or sys_id**.
+
+**Tool Name:** `get_incident`
+
+**Parameters:**
+- `incident_id` (string, required): Incident number (e.g. `INC0010001`) or sys_id
+
+**Example:**
+```python
+result = await mcp.use_tool("servicenow", "get_incident", {"incident_id": "INC0010001"})
+print(result["incident"]["state"])
+```
+
+### Close Incident
+
+Closes an incident (state = `7` Closed). Like resolving, the resolution code and
+close notes are mandatory.
+
+**Tool Name:** `close_incident`
+
+**Parameters:**
+- `incident_id` (string, required): Incident number or sys_id
+- `close_code` (string, required): Resolution code (instance-specific choice — see Resolve Incident)
+- `close_notes` (string, required): Close notes
+
+### Reopen Incident
+
+Reopens a resolved/closed incident (state = `2` In Progress).
+
+**Tool Name:** `reopen_incident`
+
+**Parameters:**
+- `incident_id` (string, required): Incident number or sys_id
+- `reopen_notes` (string, optional): Work note explaining why it is being reopened
+
+### Delete Incident
+
+Deletes an incident by **number or sys_id**. *(Destructive — requires a role
+with delete access on the incident table.)*
+
+**Tool Name:** `delete_incident`
+
+**Parameters:**
+- `incident_id` (string, required): Incident number (e.g. `INC0010001`) or sys_id
+
+**Example:**
+```python
+result = await mcp.use_tool("servicenow", "delete_incident", {"incident_id": "INC0010001"})
+print(f"Deleted: {result.success}")
+```
+
+## Read output: codes vs. labels
+
+The read tools (`list_incidents`, `get_incident`, `get_incident_by_number`)
+return coded fields as **both** the raw code and a display label:
+
+- `state` → the code (e.g. `"6"`), with `state_display` → `"Resolved"`
+- `priority` → the code (e.g. `"3"`), with `priority_display` → `"3 - Moderate"`
+
+Pass the **code** (`state`, `priority`) back into `update_incident` and into
+`list_incidents` filters; use the `*_display` values for presentation.
+
 ## State Values
 
-ServiceNow incident states are represented by numeric values:
+ServiceNow incident states are represented by numeric values. Pass these codes
+(not the display labels) as the `state` parameter to `update_incident`:
 
 - `1`: New
 - `2`: In Progress
 - `3`: On Hold
-- `4`: Resolved
-- `5`: Closed
-- `6`: Canceled
+- `6`: Resolved
+- `7`: Closed
+- `8`: Canceled
+
+> **Note:** Moving an incident to `6` (Resolved) or `7` (Closed) is gated by a
+> ServiceNow Data Policy that makes **Resolution code (`close_code`)** and
+> **Close notes (`close_notes`)** mandatory. Use `resolve_incident` (which sets
+> them) rather than `update_incident` with `state=6` alone — otherwise the
+> instance rejects the change with an HTTP 403 *"Data Policy Exception: the
+> following fields are mandatory"*. Moving to `3` (On Hold) may require
+> `on_hold_reason` depending on the instance.
 
 ## Priority Values
 
@@ -184,10 +269,14 @@ ServiceNow incident priorities are represented by numeric values:
 
 ## Testing
 
-You can test the incident management functionality using the provided test script:
+You can exercise **every** incident tool end-to-end against a live instance with
+the provided script. It drives the real tool functions and re-fetches each record
+after every change to confirm the change actually persisted (a tool can return
+HTTP 200 while ServiceNow silently ignores an invalid field value):
 
 ```bash
-python examples/test_incidents.py
+.venv/Scripts/python scripts/test_incidents_live.py          # create..resolve..delete
+.venv/Scripts/python scripts/test_incidents_live.py --keep   # leave the test incident in place
 ```
 
 Make sure to set the required environment variables in your `.env` file:

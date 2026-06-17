@@ -1,14 +1,37 @@
 
 import unittest
 from unittest.mock import MagicMock, patch
-from servicenow_mcp.tools.incident_tools import get_incident_by_number, GetIncidentByNumberParams
+
+import requests
+
+from servicenow_mcp.tools.incident_tools import (
+    CloseIncidentParams,
+    DeleteIncidentParams,
+    GetIncidentByNumberParams,
+    GetIncidentParams,
+    ReopenIncidentParams,
+    ResolveIncidentParams,
+    close_incident,
+    delete_incident,
+    get_incident,
+    get_incident_by_number,
+    reopen_incident,
+    resolve_incident,
+)
 from servicenow_mcp.utils.config import ServerConfig, AuthConfig, AuthType, BasicAuthConfig
 from servicenow_mcp.auth.auth_manager import AuthManager
+
+# A valid-looking 32-char hex sys_id lets us skip the number->sys_id lookup GET.
+SYS_ID = "0123456789abcdef0123456789abcdef"
+
 
 class TestIncidentTools(unittest.TestCase):
 
     def setUp(self):
         self.auth_config = AuthConfig(type=AuthType.BASIC, basic=BasicAuthConfig(username='test', password='test'))
+        self.config = ServerConfig(instance_url="https://dev12345.service-now.com", auth=self.auth_config)
+        self.auth_manager = MagicMock(spec=AuthManager)
+        self.auth_manager.get_headers.return_value = {"Authorization": "Bearer FAKE_TOKEN"}
 
     @patch('requests.get')
     def test_get_incident_by_number_success(self, mock_get):
@@ -73,6 +96,126 @@ class TestIncidentTools(unittest.TestCase):
         # Assert the results
         self.assertFalse(result["success"])
         self.assertEqual(result["message"], "Incident not found: INC9999999")
+
+    @patch('requests.put')
+    def test_resolve_incident_omits_resolved_at(self, mock_put):
+        """resolve_incident must NOT send resolved_at='now' (ServiceNow sets it
+        automatically; the literal 'now' is invalid and silently dropped)."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": {"sys_id": SYS_ID, "number": "INC0010001"}}
+        mock_put.return_value = mock_response
+
+        result = resolve_incident(self.config, self.auth_manager, ResolveIncidentParams(
+            incident_id=SYS_ID, resolution_code="Solution provided", resolution_notes="done"))
+
+        self.assertTrue(result.success)
+        sent = mock_put.call_args.kwargs["json"]
+        self.assertNotIn("resolved_at", sent)          # the bug that broke resolve
+        self.assertEqual(sent["state"], "6")
+        self.assertEqual(sent["close_code"], "Solution provided")
+        self.assertEqual(sent["close_notes"], "done")
+
+    @patch('requests.put')
+    def test_resolve_incident_surfaces_servicenow_error_detail(self, mock_put):
+        """A failed resolve must surface ServiceNow's error detail, not just '403'."""
+        err_resp = MagicMock()
+        err_resp.status_code = 403
+        err_resp.json.return_value = {
+            "error": {"message": "Operation Failed",
+                      "detail": "Data Policy Exception: The following fields are mandatory: Resolution code"},
+            "status": "failure",
+        }
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(response=err_resp)
+        mock_put.return_value = mock_response
+
+        result = resolve_incident(self.config, self.auth_manager, ResolveIncidentParams(
+            incident_id=SYS_ID, resolution_code="bad", resolution_notes="x"))
+
+        self.assertFalse(result.success)
+        self.assertIn("Resolution code", result.message)
+        self.assertIn("403", result.message)
+
+    @patch('requests.delete')
+    def test_delete_incident_success(self, mock_delete):
+        mock_response = MagicMock()
+        mock_response.status_code = 204
+        mock_delete.return_value = mock_response
+
+        result = delete_incident(self.config, self.auth_manager, DeleteIncidentParams(incident_id=SYS_ID))
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.message, "Incident deleted successfully")
+        self.assertEqual(result.incident_id, SYS_ID)
+        self.assertTrue(mock_delete.call_args.args[0].endswith(f"/table/incident/{SYS_ID}"))
+
+    @patch('requests.get')
+    def test_get_incident_by_sys_id(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": {"sys_id": SYS_ID, "number": "INC0010001",
+                                                       "short_description": "x", "state": "1"}}
+        mock_get.return_value = mock_response
+
+        result = get_incident(self.config, self.auth_manager, GetIncidentParams(incident_id=SYS_ID))
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["incident"]["number"], "INC0010001")
+
+    @patch('requests.get')
+    def test_get_incident_returns_code_and_label(self, mock_get):
+        """With display_value=all, state/priority come back as {value, display_value};
+        the tool must expose the raw CODE plus a *_display label."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": {
+            "sys_id": {"value": SYS_ID, "display_value": SYS_ID},
+            "number": {"value": "INC0010001", "display_value": "INC0010001"},
+            "state": {"value": "6", "display_value": "Resolved"},
+            "priority": {"value": "3", "display_value": "3 - Moderate"},
+            "assigned_to": {"value": "abc", "display_value": "Admin User"},
+        }}
+        mock_get.return_value = mock_response
+
+        incident = get_incident(self.config, self.auth_manager, GetIncidentParams(incident_id=SYS_ID))["incident"]
+
+        self.assertEqual(incident["state"], "6")
+        self.assertEqual(incident["state_display"], "Resolved")
+        self.assertEqual(incident["priority"], "3")
+        self.assertEqual(incident["assigned_to"], "Admin User")
+
+    @patch('requests.put')
+    def test_close_incident_sets_state_7(self, mock_put):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": {"sys_id": SYS_ID, "number": "INC0010001"}}
+        mock_put.return_value = mock_response
+
+        result = close_incident(self.config, self.auth_manager, CloseIncidentParams(
+            incident_id=SYS_ID, close_code="Solution provided", close_notes="done"))
+
+        self.assertTrue(result.success)
+        sent = mock_put.call_args.kwargs["json"]
+        self.assertEqual(sent["state"], "7")
+        self.assertEqual(sent["close_code"], "Solution provided")
+        self.assertNotIn("resolved_at", sent)
+
+    @patch('requests.put')
+    def test_reopen_incident_sets_state_2_with_note(self, mock_put):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": {"sys_id": SYS_ID, "number": "INC0010001"}}
+        mock_put.return_value = mock_response
+
+        result = reopen_incident(self.config, self.auth_manager, ReopenIncidentParams(
+            incident_id=SYS_ID, reopen_notes="needs more work"))
+
+        self.assertTrue(result.success)
+        sent = mock_put.call_args.kwargs["json"]
+        self.assertEqual(sent["state"], "2")
+        self.assertEqual(sent["work_notes"], "needs more work")
+
 
 if __name__ == '__main__':
     unittest.main()

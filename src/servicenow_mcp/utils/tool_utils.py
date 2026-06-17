@@ -118,17 +118,33 @@ from servicenow_mcp.tools.changeset_tools import (
 )
 from servicenow_mcp.tools.incident_tools import (
     AddCommentParams,
+    CloseIncidentParams,
     CreateIncidentParams,
+    DeleteIncidentParams,
+    GetIncidentByNumberParams,
+    GetIncidentParams,
     ListIncidentsParams,
+    ReopenIncidentParams,
     ResolveIncidentParams,
     UpdateIncidentParams,
-    GetIncidentByNumberParams,
 )
 from servicenow_mcp.tools.incident_tools import (
     add_comment as add_comment_tool,
 )
 from servicenow_mcp.tools.incident_tools import (
+    close_incident as close_incident_tool,
+)
+from servicenow_mcp.tools.incident_tools import (
     create_incident as create_incident_tool,
+)
+from servicenow_mcp.tools.incident_tools import (
+    delete_incident as delete_incident_tool,
+)
+from servicenow_mcp.tools.incident_tools import (
+    get_incident as get_incident_tool,
+)
+from servicenow_mcp.tools.incident_tools import (
+    reopen_incident as reopen_incident_tool,
 )
 from servicenow_mcp.tools.incident_tools import (
     list_incidents as list_incidents_tool,
@@ -406,6 +422,34 @@ def get_tool_definitions(
             str,
             "Incident details from ServiceNow",
             "json_dict"
+        ),
+        "get_incident": (
+            get_incident_tool,
+            GetIncidentParams,
+            str,  # Expects JSON string
+            "Get a single incident from ServiceNow by number or sys_id",
+            "json_dict",
+        ),
+        "delete_incident": (
+            delete_incident_tool,
+            DeleteIncidentParams,
+            str,
+            "Delete an incident in ServiceNow by number or sys_id",
+            "str",
+        ),
+        "close_incident": (
+            close_incident_tool,
+            CloseIncidentParams,
+            str,
+            "Close an incident in ServiceNow (state Closed). Requires close_code and close_notes.",
+            "str",
+        ),
+        "reopen_incident": (
+            reopen_incident_tool,
+            ReopenIncidentParams,
+            str,
+            "Reopen a resolved or closed incident in ServiceNow (state In Progress)",
+            "str",
         ),
         # Catalog Tools
         "list_catalog_items": (
