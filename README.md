@@ -187,7 +187,6 @@ The default `config/tool_packages.yaml` includes the following role-based packag
 7. **create_catalog_item_variable** - Create a new variable (form field) for a catalog item
 8. **list_catalog_item_variables** - List all variables for a catalog item
 9. **update_catalog_item_variable** - Update an existing variable for a catalog item
-10. **list_catalogs** - List service catalogs from ServiceNow
 
 #### Catalog Optimization Tools
 
@@ -277,11 +276,6 @@ The default `config/tool_packages.yaml` includes the following role-based packag
 7. **add_group_members** - Add members to a group in ServiceNow
 8. **remove_group_members** - Remove members from a group in ServiceNow
 9. **list_groups** - List groups with filtering options
-
-#### UI Policy Tools
-
-1. **create_ui_policy** - Creates a ServiceNow UI Policy, typically for a Catalog Item.
-2. **create_ui_policy_action** - Creates an action associated with a UI Policy to control variable states (visibility, mandatory, etc.).
 
 ### Using the MCP CLI
 
