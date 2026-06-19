@@ -78,12 +78,16 @@ def main():
     next_year = (today + timedelta(days=365)).strftime("%Y-%m-%d")
     uniq = "MCPdatesearch" + today.strftime("%H%M%S")
 
-    print("0) create test incident")
-    c = create_incident(config, auth, CreateIncidentParams(short_description=f"[{uniq}] date search test"))
+    print("0) create test incident (urgency=1, impact=1 -> priority=1)")
+    c = create_incident(config, auth, CreateIncidentParams(
+        short_description=f"[{uniq}] date search test", urgency="1", impact="1"))
     record("create returns success", c.success, c.message)
     if not c.success:
         sys.exit(f"{RED}stop{RST}")
-    num = c.incident_number
+    num, sid = c.incident_number, c.incident_id
+    # severity isn't a create param; set it directly so we can exercise the filter
+    requests.patch(f"{config.api_url}/table/incident/{sid}", json={"severity": "1"},
+                   headers=auth.get_headers(), timeout=config.timeout)
     print(f"         {DIM}created {num}{RST}")
 
     print("1) created_after (>= yesterday) -> includes new incident")
@@ -109,7 +113,17 @@ def main():
     record("excluded by updated_before 2000-01-01", not has(list_incidents(config, auth,
            ListIncidentsParams(updated_before="2000-01-01", limit=100)), num))
 
-    print("6) combined free-text query + created_after (verifies ^OR grouping)")
+    print("6) field filters: urgency / severity / impact / priority")
+    record("found via urgency=1", has(list_incidents(config, auth, ListIncidentsParams(urgency="1", limit=100)), num))
+    record("excluded by urgency=3", not has(list_incidents(config, auth, ListIncidentsParams(urgency="3", limit=100)), num))
+    record("found via severity=1", has(list_incidents(config, auth, ListIncidentsParams(severity="1", limit=100)), num))
+    record("found via impact=1", has(list_incidents(config, auth, ListIncidentsParams(impact="1", limit=100)), num))
+    record("found via priority=1", has(list_incidents(config, auth, ListIncidentsParams(priority="1", limit=100)), num))
+
+    print("7) keyword search via query")
+    record("found via keyword query", has(list_incidents(config, auth, ListIncidentsParams(query=uniq, limit=100)), num))
+
+    print("8) combined free-text query + created_after (verifies ^OR grouping)")
     record("found via text + date", has(list_incidents(config, auth,
            ListIncidentsParams(query=uniq, created_after=yesterday, limit=100)), num))
     record("text + future date excludes", not has(list_incidents(config, auth,

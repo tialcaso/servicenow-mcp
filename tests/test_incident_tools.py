@@ -265,7 +265,7 @@ class TestIncidentTools(unittest.TestCase):
         mock_get.return_value = mock_response
 
         list_incidents(self.config, self.auth_manager, ListIncidentsParams(
-            query="vpn", state="2",
+            query="vpn", state="2", urgency="1", severity="2", impact="3", priority="1",
             created_after="2026-06-01", created_before="2026-06-30",
             updated_after="2026-06-15 09:00:00"))
 
@@ -273,6 +273,11 @@ class TestIncidentTools(unittest.TestCase):
         # free-text OR must come first so the trailing ANDs apply to the whole set
         self.assertTrue(q.startswith("short_descriptionLIKEvpn^ORdescriptionLIKEvpn^"))
         self.assertIn("state=2", q)
+        # urgency / severity / impact / priority equality filters
+        self.assertIn("urgency=1", q)
+        self.assertIn("severity=2", q)
+        self.assertIn("impact=3", q)
+        self.assertIn("priority=1", q)
         # date-only bounds expand to start/end of day; full datetime passes through
         self.assertIn("sys_created_on>=2026-06-01 00:00:00", q)
         self.assertIn("sys_created_on<=2026-06-30 23:59:59", q)

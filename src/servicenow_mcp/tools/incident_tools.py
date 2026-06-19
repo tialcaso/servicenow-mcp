@@ -98,7 +98,13 @@ class ListIncidentsParams(BaseModel):
     state: Optional[str] = Field(None, description="Filter by incident state")
     assigned_to: Optional[str] = Field(None, description="Filter by assigned user")
     category: Optional[str] = Field(None, description="Filter by category")
-    query: Optional[str] = Field(None, description="Search query for incidents")
+    urgency: Optional[str] = Field(None, description="Filter by urgency (1 High, 2 Medium, 3 Low)")
+    severity: Optional[str] = Field(None, description="Filter by severity (1 High, 2 Medium, 3 Low)")
+    impact: Optional[str] = Field(None, description="Filter by impact (1 High, 2 Medium, 3 Low)")
+    priority: Optional[str] = Field(None, description="Filter by priority (1 Critical .. 5 Planning)")
+    query: Optional[str] = Field(
+        None, description="Free-text keyword search across short description and description"
+    )
     created_after: Optional[str] = Field(
         None,
         description="Only incidents created on/after this date. Accepts 'YYYY-MM-DD' "
@@ -653,6 +659,14 @@ def list_incidents(
         filters.append(f"assigned_to={params.assigned_to}")
     if params.category:
         filters.append(f"category={params.category}")
+    if params.urgency:
+        filters.append(f"urgency={params.urgency}")
+    if params.severity:
+        filters.append(f"severity={params.severity}")
+    if params.impact:
+        filters.append(f"impact={params.impact}")
+    if params.priority:
+        filters.append(f"priority={params.priority}")
     # Creation-date filters (single date, or a range with both bounds)
     if params.created_after:
         filters.append(f"sys_created_on>={_date_bound(params.created_after, end_of_day=False)}")

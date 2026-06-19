@@ -20,7 +20,11 @@ Retrieves a list of incidents from ServiceNow.
 - `state` (string, optional): Filter by incident state
 - `assigned_to` (string, optional): Filter by assigned user
 - `category` (string, optional): Filter by category
-- `query` (string, optional): Free-text search across short description / description
+- `urgency` (string, optional): Filter by urgency (`1` High, `2` Medium, `3` Low)
+- `severity` (string, optional): Filter by severity (`1` High, `2` Medium, `3` Low)
+- `impact` (string, optional): Filter by impact (`1` High, `2` Medium, `3` Low)
+- `priority` (string, optional): Filter by priority (`1` Critical … `5` Planning)
+- `query` (string, optional): Free-text keyword search across short description / description
 - `created_after` (string, optional): Only incidents created **on/after** this date (`YYYY-MM-DD` = start of day, or `YYYY-MM-DD HH:MM:SS`)
 - `created_before` (string, optional): Only incidents created **on/before** this date (`YYYY-MM-DD` = end of day, or `YYYY-MM-DD HH:MM:SS`)
 - `updated_after` (string, optional): Only incidents whose **last update/response** was on/after this date
@@ -43,6 +47,12 @@ list_incidents({"state": "2", "updated_after": "2026-06-12"})
 
 # Free-text + date range together
 list_incidents({"query": "VPN", "created_after": "2026-06-01", "limit": 50})
+
+# High-urgency, high-severity open incidents
+list_incidents({"urgency": "1", "severity": "1", "state": "2"})
+
+# Keyword search (short description / description)
+list_incidents({"query": "password reset"})
 ```
 
 ### Get Incident
