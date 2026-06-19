@@ -10,6 +10,7 @@ from servicenow_mcp.tools.incident_tools import (
     DeleteIncidentParams,
     GetIncidentByNumberParams,
     GetIncidentParams,
+    ListIncidentsParams,
     ReopenIncidentParams,
     ResolveIncidentParams,
     close_incident,
@@ -17,6 +18,7 @@ from servicenow_mcp.tools.incident_tools import (
     delete_incident,
     get_incident,
     get_incident_by_number,
+    list_incidents,
     reopen_incident,
     resolve_incident,
 )
@@ -251,6 +253,30 @@ class TestIncidentTools(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertIn("sys_user", mock_get.call_args.args[0])  # looked up a user
         self.assertEqual(mock_post.call_args.kwargs["json"]["caller_id"], "62826bf03710200044e0bfc8bcbe5df1")
+
+
+    @patch('requests.get')
+    def test_list_incidents_date_and_response_filters(self, mock_get):
+        """list_incidents builds creation-date, between-dates and last-response
+        (updated) filters, with the free-text OR grouped first."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": []}
+        mock_get.return_value = mock_response
+
+        list_incidents(self.config, self.auth_manager, ListIncidentsParams(
+            query="vpn", state="2",
+            created_after="2026-06-01", created_before="2026-06-30",
+            updated_after="2026-06-15 09:00:00"))
+
+        q = mock_get.call_args[1]["params"]["sysparm_query"]
+        # free-text OR must come first so the trailing ANDs apply to the whole set
+        self.assertTrue(q.startswith("short_descriptionLIKEvpn^ORdescriptionLIKEvpn^"))
+        self.assertIn("state=2", q)
+        # date-only bounds expand to start/end of day; full datetime passes through
+        self.assertIn("sys_created_on>=2026-06-01 00:00:00", q)
+        self.assertIn("sys_created_on<=2026-06-30 23:59:59", q)
+        self.assertIn("sys_updated_on>=2026-06-15 09:00:00", q)
 
 
 if __name__ == '__main__':

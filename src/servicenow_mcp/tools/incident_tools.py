@@ -99,6 +99,26 @@ class ListIncidentsParams(BaseModel):
     assigned_to: Optional[str] = Field(None, description="Filter by assigned user")
     category: Optional[str] = Field(None, description="Filter by category")
     query: Optional[str] = Field(None, description="Search query for incidents")
+    created_after: Optional[str] = Field(
+        None,
+        description="Only incidents created on/after this date. Accepts 'YYYY-MM-DD' "
+        "(start of day) or 'YYYY-MM-DD HH:MM:SS'. Combine with created_before for a range.",
+    )
+    created_before: Optional[str] = Field(
+        None,
+        description="Only incidents created on/before this date. Accepts 'YYYY-MM-DD' "
+        "(end of day) or 'YYYY-MM-DD HH:MM:SS'.",
+    )
+    updated_after: Optional[str] = Field(
+        None,
+        description="Only incidents whose last update/response was on/after this date "
+        "('YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS').",
+    )
+    updated_before: Optional[str] = Field(
+        None,
+        description="Only incidents whose last update/response was on/before this date "
+        "('YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS').",
+    )
 
 
 class GetIncidentByNumberParams(BaseModel):
@@ -290,6 +310,19 @@ def _resolve_reference(
     if not result:
         return None, f"No {label} found matching '{value}'"
     return result[0].get("sys_id"), None
+
+
+def _date_bound(value: str, end_of_day: bool) -> str:
+    """Normalize a date filter value for a sysparm_query datetime comparison.
+
+    A date-only value ('YYYY-MM-DD') is expanded to the start (00:00:00) or end
+    (23:59:59) of that day so '<=' / '>=' cover the whole day; a full datetime is
+    used as-is.
+    """
+    v = (value or "").strip()
+    if len(v) == 10:  # YYYY-MM-DD
+        v += " 23:59:59" if end_of_day else " 00:00:00"
+    return v
 
 
 def create_incident(
@@ -607,16 +640,29 @@ def list_incidents(
         "sysparm_exclude_reference_link": "true",
     }
 
-    # Add filters
+    # Add filters. The free-text OR goes first: ServiceNow groups `^OR` with the
+    # immediately preceding term, so "shortLIKEq^ORdescLIKEq^state=X^..." parses as
+    # "(short OR desc) AND state=X AND ...". Putting it last would scope the other
+    # filters only to the first OR branch.
     filters = []
+    if params.query:
+        filters.append(f"short_descriptionLIKE{params.query}^ORdescriptionLIKE{params.query}")
     if params.state:
         filters.append(f"state={params.state}")
     if params.assigned_to:
         filters.append(f"assigned_to={params.assigned_to}")
     if params.category:
         filters.append(f"category={params.category}")
-    if params.query:
-        filters.append(f"short_descriptionLIKE{params.query}^ORdescriptionLIKE{params.query}")
+    # Creation-date filters (single date, or a range with both bounds)
+    if params.created_after:
+        filters.append(f"sys_created_on>={_date_bound(params.created_after, end_of_day=False)}")
+    if params.created_before:
+        filters.append(f"sys_created_on<={_date_bound(params.created_before, end_of_day=True)}")
+    # Last-response (last updated) filters
+    if params.updated_after:
+        filters.append(f"sys_updated_on>={_date_bound(params.updated_after, end_of_day=False)}")
+    if params.updated_before:
+        filters.append(f"sys_updated_on<={_date_bound(params.updated_before, end_of_day=True)}")
 
     # Return newest incidents first so recently-created ones are not paged out.
     query = "^".join(filters)

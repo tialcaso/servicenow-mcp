@@ -20,18 +20,29 @@ Retrieves a list of incidents from ServiceNow.
 - `state` (string, optional): Filter by incident state
 - `assigned_to` (string, optional): Filter by assigned user
 - `category` (string, optional): Filter by category
-- `query` (string, optional): Search query for incidents
+- `query` (string, optional): Free-text search across short description / description
+- `created_after` (string, optional): Only incidents created **on/after** this date (`YYYY-MM-DD` = start of day, or `YYYY-MM-DD HH:MM:SS`)
+- `created_before` (string, optional): Only incidents created **on/before** this date (`YYYY-MM-DD` = end of day, or `YYYY-MM-DD HH:MM:SS`)
+- `updated_after` (string, optional): Only incidents whose **last update/response** was on/after this date
+- `updated_before` (string, optional): Only incidents whose **last update/response** was on/before this date
 
-**Example:**
+Results are ordered newest-first by creation date. Combine `created_after` +
+`created_before` for a "between two dates" search; date and free-text filters can
+be combined freely.
+
+**Examples:**
 ```python
-incidents = await mcp.get_resource("servicenow", "incidents", {
-    "limit": 5,
-    "state": "1",  # New
-    "category": "Software"
-})
+# Incidents created on a specific day
+list_incidents({"created_after": "2026-06-19", "created_before": "2026-06-19"})
 
-for incident in incidents:
-    print(f"{incident.number}: {incident.short_description}")
+# Incidents created between two dates
+list_incidents({"created_after": "2026-06-01", "created_before": "2026-06-30"})
+
+# Incidents whose last response was in the last week (open + recently touched)
+list_incidents({"state": "2", "updated_after": "2026-06-12"})
+
+# Free-text + date range together
+list_incidents({"query": "VPN", "created_after": "2026-06-01", "limit": 50})
 ```
 
 ### Get Incident
