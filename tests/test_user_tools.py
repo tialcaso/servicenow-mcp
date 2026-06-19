@@ -487,6 +487,34 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(sent["user_password"], "Secret#1")
         self.assertEqual(sent["password_needs_reset"], "true")
         self.assertEqual(mock_patch.call_args[0][0], f"{self.config.api_url}/table/sys_user/{SYS_ID}")
+        # encrypted field must be written with sysparm_input_display_value=true,
+        # on an isolated request (no reference fields in the body)
+        self.assertEqual(mock_patch.call_args[1]["params"]["sysparm_input_display_value"], "true")
+        self.assertNotIn("manager", sent)
+
+    @patch("requests.patch")
+    @patch("requests.post")
+    def test_create_user_sets_password_in_isolated_request(self, mock_post, mock_patch):
+        """Password is NOT in the create payload; it is set via a follow-up
+        isolated PATCH with sysparm_input_display_value=true."""
+        created = MagicMock()
+        created.raise_for_status = MagicMock()
+        created.json.return_value = {"result": {"sys_id": SYS_ID, "user_name": "x"}}
+        mock_post.return_value = created
+        patched = MagicMock()
+        patched.raise_for_status = MagicMock()
+        patched.json.return_value = {"result": {"sys_id": SYS_ID, "user_name": "x"}}
+        mock_patch.return_value = patched
+
+        create_user(self.config, self.auth_manager, CreateUserParams(
+            user_name="x", first_name="X", last_name="Y", email="x@y.com",
+            manager="somemanager", password="Secret#1"))
+
+        # create POST must NOT contain user_password (would be stored unhashed)
+        self.assertNotIn("user_password", mock_post.call_args[1]["json"])
+        # follow-up PATCH sets the password with the isolation param
+        self.assertEqual(mock_patch.call_args[1]["json"]["user_password"], "Secret#1")
+        self.assertEqual(mock_patch.call_args[1]["params"]["sysparm_input_display_value"], "true")
 
     @patch("requests.delete")
     def test_delete_user(self, mock_delete):

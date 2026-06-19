@@ -269,12 +269,13 @@ def create_user(
         data["mobile_phone"] = params.mobile_phone
     if params.location:
         data["location"] = params.location
-    if params.password:
-        data["user_password"] = params.password
     if params.locked_out is not None:
         data["locked_out"] = str(params.locked_out).lower()
     if params.password_needs_reset is not None:
         data["password_needs_reset"] = str(params.password_needs_reset).lower()
+    # NOTE: user_password is intentionally NOT in this payload — it is an encrypted
+    # field that must be written in a dedicated request (see set_password), separate
+    # from the reference fields (manager/department/location) above.
 
     # Make request
     try:
@@ -291,6 +292,11 @@ def create_user(
         # Handle role assignments if provided
         if params.roles and result.get("sys_id"):
             assign_roles_to_user(config, auth_manager, result.get("sys_id"), params.roles)
+
+        # Set the password via the dedicated encrypted-field path
+        if params.password and result.get("sys_id"):
+            set_password(config, auth_manager, SetPasswordParams(
+                user_id=result.get("sys_id"), password=params.password))
 
         return UserResponse(
             success=True,
@@ -352,14 +358,13 @@ def update_user(
         data["mobile_phone"] = params.mobile_phone
     if params.location:
         data["location"] = params.location
-    if params.password:
-        data["user_password"] = params.password
     if params.active is not None:
         data["active"] = str(params.active).lower()
     if params.locked_out is not None:
         data["locked_out"] = str(params.locked_out).lower()
     if params.password_needs_reset is not None:
         data["password_needs_reset"] = str(params.password_needs_reset).lower()
+    # user_password is set separately (encrypted field) — see set_password.
 
     # Make request
     try:
@@ -376,6 +381,11 @@ def update_user(
         # Handle role assignments if provided
         if params.roles:
             assign_roles_to_user(config, auth_manager, sys_id, params.roles)
+
+        # Set the password via the dedicated encrypted-field path
+        if params.password:
+            set_password(config, auth_manager, SetPasswordParams(
+                user_id=sys_id, password=params.password))
 
         return UserResponse(
             success=True,
@@ -996,6 +1006,20 @@ def set_password(
     """
     Set (reset) a user's password in ServiceNow.
 
+    ``user_password`` is an encrypted field. This sends an isolated request with
+    ``sysparm_input_display_value=true`` (the Table API equivalent of
+    GlideRecord.setDisplayValue) so the value is run through ServiceNow's password
+    handler rather than stored verbatim. The request must be isolated because that
+    parameter reinterprets *every* submitted field as a display value, which would
+    break reference fields (manager/department/...).
+
+    Caveat: whether a Table-API write produces a usable login depends on the
+    instance — the account needs write access to ``sys_user.user_password`` and the
+    encryption context, and some instances/versions still store the value without
+    hashing or enforce a reset on API-set passwords. For guaranteed end-user
+    password setting, use ServiceNow's Password Reset workflow. Setting
+    ``require_reset=true`` forces the user to choose a new password at next login.
+
     Args:
         config: Server configuration.
         auth_manager: Authentication manager.
@@ -1015,6 +1039,7 @@ def set_password(
     try:
         response = requests.patch(
             f"{config.api_url}/table/sys_user/{sys_id}",
+            params={"sysparm_input_display_value": "true"},
             json=data,
             headers=auth_manager.get_headers(),
             timeout=config.timeout,

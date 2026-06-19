@@ -278,7 +278,18 @@ result = list_groups({
 
 ### set_password
 
-Sets (resets) a user's password.
+Sets (resets) a user's password. `user_password` is an encrypted field, so this
+sends an **isolated** request with `sysparm_input_display_value=true` (the Table
+API equivalent of `GlideRecord.setDisplayValue`) — kept separate from any
+reference-field writes, which that parameter would otherwise misinterpret.
+`create_user`/`update_user` route their `password` through this same path.
+
+> **Caveat:** whether a Table-API password write yields a usable login is
+> instance-dependent — the account needs write access to
+> `sys_user.user_password` + the encryption context, and some instances/versions
+> store the value without hashing or enforce a reset on API-set passwords. For
+> guaranteed end-user password setting, use ServiceNow's **Password Reset**
+> workflow. Use `require_reset=true` to force a change at next login.
 
 #### Parameters
 
