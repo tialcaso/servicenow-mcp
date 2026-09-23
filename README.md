@@ -15,7 +15,7 @@ This project implements an MCP server that enables Claude to connect to ServiceN
 - Access and query the ServiceNow Service Catalog
 - Analyze and optimize the ServiceNow Service Catalog
 - Debug mode for troubleshooting
-- Support for both stdio and Server-Sent Events (SSE) communication
+- Support for stdio, Server-Sent Events (SSE) and Streamable HTTP communication
 
 ## Installation
 
@@ -130,6 +130,58 @@ To bind beyond loopback from code, set `MCP_AUTH_TOKEN` and pass `allow_remote=T
 ```python
 mcp.start(host="0.0.0.0", port=8080, allow_remote=True)
 ```
+
+### Streamable HTTP Mode
+
+The server can also speak the MCP [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http) transport: a single endpoint that takes JSON-RPC over `POST`. This is the transport most hosted MCP clients expect when you register a remote server by URL.
+
+> **Security:** identical to SSE. Every request needs the bearer token, `Host` and `Origin` are checked against the same allowlist, the default bind is `127.0.0.1`, and non-loopback bind requires `--allow-remote` and an explicit `MCP_AUTH_TOKEN`. It reuses `SecurityMiddleware` from `server_sse.py`.
+
+The server runs **stateless**: each `POST` is independent, no session is kept between requests. That suits servers behind a load balancer and clients that just run `initialize` + `tools/list`. `GET` and `DELETE` are handled by the MCP SDK as it does for stateless servers.
+
+#### Starting the Streamable HTTP Server
+
+```
+servicenow-mcp-http
+```
+
+Same CLI as `servicenow-mcp-sse` (`--host`, `--port`, `--allow-remote`, `--allowed-host`) and the same env vars (`MCP_AUTH_TOKEN`, `MCP_ALLOWED_HOSTS`, `MCP_ALLOW_REMOTE`, `MCP_TOOL_PACKAGE`). The endpoint is `http://127.0.0.1:8080/mcp`:
+
+```
+curl -s -X POST http://127.0.0.1:8080/mcp   -H "Authorization: Bearer $MCP_AUTH_TOKEN"   -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream"   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}'
+```
+
+#### Mounting inside another ASGI app
+
+`create_streamable_http_app` returns a Starlette app you can mount in your own Starlette or FastAPI app, for example one route per tool package. Starlette does not run the lifespan of mounted apps, so the parent must run the MCP session managers in its own lifespan with `run_session_managers`:
+
+```python
+import contextlib
+
+from fastapi import FastAPI
+
+from servicenow_mcp.server_http import create_streamable_http_app, run_session_managers
+
+profile_a = create_streamable_http_app(
+    mcp_a.mcp_server,  # a ServiceNowMCP instance
+    auth_token=token,
+    allowed_hosts={"mcp.example.com"},
+    allowed_origins={"https://mcp.example.com"},
+    path="/",
+)
+
+@contextlib.asynccontextmanager
+async def lifespan(app):
+    async with run_session_managers(profile_a):
+        yield
+
+app = FastAPI(lifespan=lifespan)
+app.mount("/mcp/profile-a", profile_a)  # endpoint: /mcp/profile-a/
+```
+
+With `path="/"` the endpoint is the mount point with a trailing slash; without it, Starlette answers with a `307` redirect. The tool package is read from `MCP_TOOL_PACKAGE` when each `ServiceNowMCP` is created.
+
+Pass `json_response=True` to answer with plain `application/json` instead of an SSE stream.
 
 ## Tool Packaging (Optional)
 
