@@ -28,6 +28,8 @@ service_desk:
   - list_articles
   # Journal and Requested Items
   - list_journal_entries
+  - list_requested_items
+  - get_requested_item
 
 catalog_builder:
   # Core Catalog
@@ -250,3 +252,5 @@ full:
   - list_projects
   # Journal and Requested Items
   - list_journal_entries
+  - list_requested_items
+  - get_requested_item

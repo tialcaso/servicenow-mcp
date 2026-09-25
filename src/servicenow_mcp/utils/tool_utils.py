@@ -379,6 +379,18 @@ from servicenow_mcp.tools.journal_tools import (
 from servicenow_mcp.tools.journal_tools import (
     list_journal_entries as list_journal_entries_tool,
 )
+from servicenow_mcp.tools.request_tools import (
+    ListRequestedItemsParams,
+)
+from servicenow_mcp.tools.request_tools import (
+    list_requested_items as list_requested_items_tool,
+)
+from servicenow_mcp.tools.request_tools import (
+    GetRequestedItemParams,
+)
+from servicenow_mcp.tools.request_tools import (
+    get_requested_item as get_requested_item_tool,
+)
 
 # Define a type alias for the Pydantic models or dataclasses used for params
 ParamsModel = Type[Any]  # Use Type[Any] for broader compatibility initially
@@ -1064,6 +1076,20 @@ def get_tool_definitions(
             str,
             "List the journal entries (comments or work notes) of a record, newest first",
             "json",
+        ),
+        "list_requested_items": (
+            list_requested_items_tool,
+            ListRequestedItemsParams,
+            str,
+            "List service catalog requested items (RITM), newest first",
+            "json",
+        ),
+        "get_requested_item": (
+            get_requested_item_tool,
+            GetRequestedItemParams,
+            str,
+            "Get a single requested item (RITM) by number or sys_id",
+            "json_dict",
         ),
     }
     return tool_definitions

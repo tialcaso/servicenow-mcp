@@ -247,6 +247,8 @@ The default `config/tool_packages.yaml` includes the following role-based packag
 7. **create_catalog_item_variable** - Create a new variable (form field) for a catalog item
 8. **list_catalog_item_variables** - List all variables for a catalog item
 9. **update_catalog_item_variable** - Update an existing variable for a catalog item
+10. **list_requested_items** - List requested items (RITM), optionally for one user, newest first
+11. **get_requested_item** - Get a specific requested item (RITM) by number or sys_id
 
 #### Catalog Optimization Tools
 
