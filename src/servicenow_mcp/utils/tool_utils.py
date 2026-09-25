@@ -397,6 +397,12 @@ from servicenow_mcp.tools.request_tools import (
 from servicenow_mcp.tools.request_tools import (
     order_catalog_item as order_catalog_item_tool,
 )
+from servicenow_mcp.tools.journal_tools import (
+    AddJournalEntryParams,
+)
+from servicenow_mcp.tools.journal_tools import (
+    add_journal_entry as add_journal_entry_tool,
+)
 
 # Define a type alias for the Pydantic models or dataclasses used for params
 ParamsModel = Type[Any]  # Use Type[Any] for broader compatibility initially
@@ -1102,6 +1108,13 @@ def get_tool_definitions(
             OrderCatalogItemParams,
             str,
             "Order a service catalog item for a user and return the request (REQ) and requested item (RITM)",
+            "str",
+        ),
+        "add_journal_entry": (
+            add_journal_entry_tool,
+            AddJournalEntryParams,
+            str,
+            "Add a work note or an additional comment to an incident or a requested item",
             "str",
         ),
     }

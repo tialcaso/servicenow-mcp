@@ -235,6 +235,7 @@ The default `config/tool_packages.yaml` includes the following role-based packag
 #### Journal Tools
 
 1. **list_journal_entries** - List the additional comments or work notes of any record (e.g. an incident or a requested item), newest first
+2. **add_journal_entry** - Add a work note or an additional comment to an incident or a requested item
 
 #### Service Catalog Tools
 

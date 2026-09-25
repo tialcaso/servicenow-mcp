@@ -31,6 +31,7 @@ service_desk:
   - list_requested_items
   - get_requested_item
   - order_catalog_item
+  - add_journal_entry
 
 catalog_builder:
   # Core Catalog
@@ -256,3 +257,4 @@ full:
   - list_requested_items
   - get_requested_item
   - order_catalog_item
+  - add_journal_entry
