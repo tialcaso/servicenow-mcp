@@ -1,12 +1,13 @@
 """
 Requested item tools for the ServiceNow MCP server.
 
-This module provides tools for reading service catalog requested items (sc_req_item, "RITM").
+This module provides tools for reading service catalog requested items (sc_req_item, "RITM")
+and for ordering a catalog item through the Service Catalog API.
 """
 
 import logging
 import re
-from typing import Optional
+from typing import Dict, Optional
 
 import requests
 from pydantic import BaseModel, Field
@@ -35,6 +36,30 @@ class ListRequestedItemsParams(BaseModel):
         None,
         description="Only items created on/after this date ('YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS')",
     )
+
+
+class OrderCatalogItemParams(BaseModel):
+    """Parameters for ordering a catalog item."""
+
+    item_id: str = Field(..., description="sys_id of the catalog item (sc_cat_item)")
+    variables: Dict[str, str] = Field(
+        default_factory=dict, description="Catalog variables by internal name, e.g. {'start_date': '2026-06-01'}"
+    )
+    requested_for: Optional[str] = Field(
+        None, description="sys_id of the user the item is requested for (default: the API user)"
+    )
+    quantity: int = Field(1, description="Quantity to order")
+
+
+class OrderCatalogItemResponse(BaseModel):
+    """Response from ordering a catalog item."""
+
+    success: bool = Field(..., description="Whether the operation was successful")
+    message: str = Field(..., description="Message describing the result")
+    request_number: Optional[str] = Field(None, description="Number of the created request (REQ)")
+    request_sys_id: Optional[str] = Field(None, description="sys_id of the created request")
+    ritm_number: Optional[str] = Field(None, description="Number of the created requested item (RITM)")
+    ritm_sys_id: Optional[str] = Field(None, description="sys_id of the created requested item")
 
 
 class GetRequestedItemParams(BaseModel):
@@ -176,3 +201,79 @@ def get_requested_item(
         return {"success": False, "message": f"Requested item not found: {params.number}"}
     item = _format_requested_item(result[0])
     return {"success": True, "message": f"Requested item {item['number']} found", "requested_item": item}
+
+
+def order_catalog_item(
+    config: ServerConfig,
+    auth_manager: AuthManager,
+    params: OrderCatalogItemParams,
+) -> OrderCatalogItemResponse:
+    """
+    Order a catalog item (Service Catalog API ``order_now``) and return the REQ and its RITM.
+
+    ``order_now`` only returns the request (REQ), so the requested item is looked up afterwards
+    with ``sc_req_item?request=<request sys_id>``. If ServiceNow refuses the order (for example a
+    mandatory variable is missing), its error message is returned instead of raising.
+
+    Args:
+        config: Server configuration.
+        auth_manager: Authentication manager.
+        params: Parameters for the order.
+
+    Returns:
+        Response with the request and requested item numbers and sys_ids.
+    """
+    if not _is_sys_id(params.item_id):
+        return OrderCatalogItemResponse(success=False, message=f"Invalid catalog item sys_id: {params.item_id}")
+    if params.requested_for and not _is_sys_id(params.requested_for):
+        return OrderCatalogItemResponse(
+            success=False, message=f"Invalid requested_for sys_id: {params.requested_for}"
+        )
+
+    body = {"sysparm_quantity": str(params.quantity), "variables": params.variables}
+    if params.requested_for:
+        body["sysparm_requested_for"] = params.requested_for
+
+    try:
+        response = requests.post(
+            f"{config.instance_url}/api/sn_sc/servicecatalog/items/{params.item_id}/order_now",
+            json=body,
+            headers=auth_manager.get_headers(),
+            timeout=config.timeout,
+        )
+        response.raise_for_status()
+    except requests.RequestException as e:
+        logger.error(f"Failed to order catalog item: {e}")
+        return OrderCatalogItemResponse(
+            success=False, message=f"Failed to order catalog item: {error_detail(e)}"
+        )
+
+    result = response.json().get("result", {}) or {}
+    request_sys_id = result.get("sys_id") or result.get("request_id")
+    request_number = result.get("number") or result.get("request_number")
+    if not request_sys_id:
+        return OrderCatalogItemResponse(success=False, message="Order placed but no request was returned")
+
+    try:
+        lookup = requests.get(
+            f"{config.api_url}/table/sc_req_item",
+            params={"sysparm_query": f"request={request_sys_id}", "sysparm_fields": "sys_id,number",
+                    "sysparm_limit": 1},
+            headers=auth_manager.get_headers(),
+            timeout=config.timeout,
+        )
+        lookup.raise_for_status()
+        ritms = lookup.json().get("result", [])
+    except requests.RequestException as e:
+        logger.error(f"Order placed but failed to look up its requested item: {e}")
+        ritms = []
+
+    ritm = ritms[0] if ritms else {}
+    return OrderCatalogItemResponse(
+        success=True,
+        message="Catalog item ordered" if ritm else "Catalog item ordered; requested item not found yet",
+        request_number=request_number,
+        request_sys_id=request_sys_id,
+        ritm_number=ritm.get("number"),
+        ritm_sys_id=ritm.get("sys_id"),
+    )

@@ -117,6 +117,7 @@ from servicenow_mcp.tools.journal_tools import (
     list_journal_entries,
 )
 from servicenow_mcp.tools.request_tools import (
+    order_catalog_item,
     get_requested_item,
     list_requested_items,
 )
@@ -233,6 +234,7 @@ __all__ = [
     "list_journal_entries",
     "list_requested_items",
     "get_requested_item",
+    "order_catalog_item",
     
     # Future tools
     # "create_problem",

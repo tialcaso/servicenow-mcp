@@ -391,6 +391,12 @@ from servicenow_mcp.tools.request_tools import (
 from servicenow_mcp.tools.request_tools import (
     get_requested_item as get_requested_item_tool,
 )
+from servicenow_mcp.tools.request_tools import (
+    OrderCatalogItemParams,
+)
+from servicenow_mcp.tools.request_tools import (
+    order_catalog_item as order_catalog_item_tool,
+)
 
 # Define a type alias for the Pydantic models or dataclasses used for params
 ParamsModel = Type[Any]  # Use Type[Any] for broader compatibility initially
@@ -1090,6 +1096,13 @@ def get_tool_definitions(
             str,
             "Get a single requested item (RITM) by number or sys_id",
             "json_dict",
+        ),
+        "order_catalog_item": (
+            order_catalog_item_tool,
+            OrderCatalogItemParams,
+            str,
+            "Order a service catalog item for a user and return the request (REQ) and requested item (RITM)",
+            "str",
         ),
     }
     return tool_definitions

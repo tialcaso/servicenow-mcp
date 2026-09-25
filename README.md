@@ -249,6 +249,7 @@ The default `config/tool_packages.yaml` includes the following role-based packag
 9. **update_catalog_item_variable** - Update an existing variable for a catalog item
 10. **list_requested_items** - List requested items (RITM), optionally for one user, newest first
 11. **get_requested_item** - Get a specific requested item (RITM) by number or sys_id
+12. **order_catalog_item** - Order a catalog item for a user (Service Catalog API `order_now`) and return the REQ and RITM numbers
 
 #### Catalog Optimization Tools
 
