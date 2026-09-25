@@ -283,6 +283,57 @@ class TestIncidentTools(unittest.TestCase):
         self.assertIn("sys_created_on<=2026-06-30 23:59:59", q)
         self.assertIn("sys_updated_on>=2026-06-15 09:00:00", q)
 
+    @patch('requests.get')
+    def test_list_incidents_filters_by_caller(self, mock_get):
+        """caller_id is an equality filter on the caller's sys_id, ANDed after the free text."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": []}
+        mock_get.return_value = mock_response
+
+        list_incidents(self.config, self.auth_manager, ListIncidentsParams(query="vpn", caller_id=SYS_ID))
+
+        q = mock_get.call_args[1]["params"]["sysparm_query"]
+        self.assertTrue(q.startswith("short_descriptionLIKEvpn^ORdescriptionLIKEvpn^"))
+        self.assertIn(f"caller_id={SYS_ID}", q)
+
+    @patch('requests.get')
+    def test_list_incidents_without_caller_adds_no_caller_filter(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": []}
+        mock_get.return_value = mock_response
+
+        list_incidents(self.config, self.auth_manager, ListIncidentsParams())
+
+        self.assertNotIn("caller_id", mock_get.call_args[1]["params"]["sysparm_query"])
+
+    @patch('requests.get')
+    def test_incident_format_includes_caller_opened_at_and_contact_type(self, mock_get):
+        """New fields are added alongside the existing ones; nothing is removed or renamed."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": [{
+            "sys_id": {"value": SYS_ID, "display_value": SYS_ID},
+            "number": {"value": "INC0010001", "display_value": "INC0010001"},
+            "state": {"value": "2", "display_value": "In Progress"},
+            "caller_id": {"value": "fedcba9876543210fedcba9876543210", "display_value": "Jane Tester"},
+            "opened_at": {"value": "2026-06-01 09:30:00", "display_value": "2026-06-01 02:30:00"},
+            "contact_type": {"value": "phone", "display_value": "Phone"},
+        }]}
+        mock_get.return_value = mock_response
+
+        incident = list_incidents(self.config, self.auth_manager, ListIncidentsParams())["incidents"][0]
+
+        self.assertEqual(incident["caller_id"], "fedcba9876543210fedcba9876543210")
+        self.assertEqual(incident["caller_display"], "Jane Tester")
+        self.assertEqual(incident["opened_at"], "2026-06-01 09:30:00")
+        self.assertEqual(incident["contact_type"], "phone")
+        for existing in ("sys_id", "number", "short_description", "description", "state",
+                         "state_display", "priority", "priority_display", "assigned_to",
+                         "category", "subcategory", "created_on", "updated_on"):
+            self.assertIn(existing, incident)
+
 
 if __name__ == '__main__':
     unittest.main()
