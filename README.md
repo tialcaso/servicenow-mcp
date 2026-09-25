@@ -232,6 +232,11 @@ The default `config/tool_packages.yaml` includes the following role-based packag
 4. **resolve_incident** - Resolve an incident in ServiceNow
 5. **list_incidents** - List incidents from ServiceNow
 
+#### Journal Tools
+
+1. **list_journal_entries** - List the additional comments or work notes of any record (e.g. an incident or a requested item), newest first
+2. **add_journal_entry** - Add a work note or an additional comment to an incident or a requested item
+
 #### Service Catalog Tools
 
 1. **list_catalog_items** - List service catalog items from ServiceNow
@@ -243,6 +248,9 @@ The default `config/tool_packages.yaml` includes the following role-based packag
 7. **create_catalog_item_variable** - Create a new variable (form field) for a catalog item
 8. **list_catalog_item_variables** - List all variables for a catalog item
 9. **update_catalog_item_variable** - Update an existing variable for a catalog item
+10. **list_requested_items** - List requested items (RITM), optionally for one user, newest first
+11. **get_requested_item** - Get a specific requested item (RITM) by number or sys_id
+12. **order_catalog_item** - Order a catalog item for a user (Service Catalog API `order_now`) and return the REQ and RITM numbers
 
 #### Catalog Optimization Tools
 
@@ -325,7 +333,7 @@ The default `config/tool_packages.yaml` includes the following role-based packag
 
 1. **create_user** - Create a new user in ServiceNow
 2. **update_user** - Update an existing user in ServiceNow
-3. **get_user** - Get a specific user by ID, username, or email
+3. **get_user** - Get a specific user by ID, username, email, or employee number
 4. **list_users** - List users with filtering options
 5. **create_group** - Create a new group in ServiceNow
 6. **update_group** - Update an existing group in ServiceNow

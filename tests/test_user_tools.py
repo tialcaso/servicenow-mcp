@@ -526,5 +526,55 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(mock_delete.call_args[0][0], f"{self.config.api_url}/table/sys_user/{SYS_ID}")
 
 
+    @patch("requests.get")
+    def test_get_user_by_employee_number(self, mock_get):
+        """employee_number is a lookup key, and the record comes back with its directory fields."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"result": [{
+            "sys_id": "user123",
+            "user_name": "jane.tester",
+            "employee_number": "E-0042",
+            "mobile_phone": "+1 555 0100",
+            "time_zone": "Europe/Berlin",
+        }]}
+        mock_get.return_value = mock_response
+
+        result = get_user(self.config, self.auth_manager, GetUserParams(employee_number="E-0042"))
+
+        self.assertTrue(result["success"])
+        self.assertEqual(mock_get.call_args[1]["params"]["sysparm_query"], "employee_number=E-0042")
+        for field in ("employee_number", "mobile_phone", "time_zone"):
+            self.assertIn(field, result["user"])
+
+    @patch("requests.post")
+    def test_create_user_sets_employee_number_and_time_zone(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"result": {"sys_id": "user123", "user_name": "jane.tester"}}
+        mock_post.return_value = mock_response
+
+        create_user(self.config, self.auth_manager, CreateUserParams(
+            user_name="jane.tester", first_name="Jane", last_name="Tester", email="jane@example.com",
+            employee_number="E-0042", time_zone="Europe/Berlin"))
+
+        data = mock_post.call_args[1]["json"]
+        self.assertEqual(data["employee_number"], "E-0042")
+        self.assertEqual(data["time_zone"], "Europe/Berlin")
+
+    @patch("requests.patch")
+    def test_update_user_sets_employee_number_and_time_zone(self, mock_patch):
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"result": {"sys_id": SYS_ID, "user_name": "jane.tester"}}
+        mock_patch.return_value = mock_response
+
+        update_user(self.config, self.auth_manager, UpdateUserParams(
+            user_id=SYS_ID, employee_number="E-0042", time_zone="Europe/Berlin"))
+
+        data = mock_patch.call_args[1]["json"]
+        self.assertEqual(data, {"employee_number": "E-0042", "time_zone": "Europe/Berlin"})
+
+
 if __name__ == "__main__":
     unittest.main() 

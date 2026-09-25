@@ -31,6 +31,10 @@ class CreateUserParams(BaseModel):
     phone: Optional[str] = Field(None, description="Phone number of the user")
     mobile_phone: Optional[str] = Field(None, description="Mobile phone number of the user")
     location: Optional[str] = Field(None, description="Location of the user")
+    employee_number: Optional[str] = Field(None, description="Employee number of the user")
+    time_zone: Optional[str] = Field(
+        None, description="Time zone of the user (e.g. Europe/Lisbon); must be an active choice"
+    )
     password: Optional[str] = Field(None, description="Password for the user account")
     active: Optional[bool] = Field(True, description="Whether the user account is active")
     locked_out: Optional[bool] = Field(None, description="Whether the user account is locked out")
@@ -54,6 +58,10 @@ class UpdateUserParams(BaseModel):
     phone: Optional[str] = Field(None, description="Phone number of the user")
     mobile_phone: Optional[str] = Field(None, description="Mobile phone number of the user")
     location: Optional[str] = Field(None, description="Location of the user")
+    employee_number: Optional[str] = Field(None, description="Employee number of the user")
+    time_zone: Optional[str] = Field(
+        None, description="Time zone of the user (e.g. Europe/Lisbon); must be an active choice"
+    )
     password: Optional[str] = Field(None, description="Password for the user account")
     active: Optional[bool] = Field(None, description="Whether the user account is active")
     locked_out: Optional[bool] = Field(None, description="Whether the user account is locked out")
@@ -68,6 +76,7 @@ class GetUserParams(BaseModel):
     user_id: Optional[str] = Field(None, description="User ID or sys_id")
     user_name: Optional[str] = Field(None, description="Username of the user")
     email: Optional[str] = Field(None, description="Email address of the user")
+    employee_number: Optional[str] = Field(None, description="Employee number of the user")
 
 
 class ListUsersParams(BaseModel):
@@ -269,6 +278,10 @@ def create_user(
         data["mobile_phone"] = params.mobile_phone
     if params.location:
         data["location"] = params.location
+    if params.employee_number:
+        data["employee_number"] = params.employee_number
+    if params.time_zone:
+        data["time_zone"] = params.time_zone
     if params.locked_out is not None:
         data["locked_out"] = str(params.locked_out).lower()
     if params.password_needs_reset is not None:
@@ -358,6 +371,10 @@ def update_user(
         data["mobile_phone"] = params.mobile_phone
     if params.location:
         data["location"] = params.location
+    if params.employee_number:
+        data["employee_number"] = params.employee_number
+    if params.time_zone:
+        data["time_zone"] = params.time_zone
     if params.active is not None:
         data["active"] = str(params.active).lower()
     if params.locked_out is not None:
@@ -428,6 +445,8 @@ def get_user(
         query_params["sysparm_query"] = f"user_name={params.user_name}"
     elif params.email:
         query_params["sysparm_query"] = f"email={params.email}"
+    elif params.employee_number:
+        query_params["sysparm_query"] = f"employee_number={params.employee_number}"
     else:
         return {"success": False, "message": "At least one search parameter is required"}
 

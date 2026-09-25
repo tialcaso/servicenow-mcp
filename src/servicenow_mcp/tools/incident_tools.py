@@ -53,6 +53,11 @@ class UpdateIncidentParams(BaseModel):
     state: Optional[str] = Field(
         None, description="State code: 1 New, 2 In Progress, 3 On Hold, 6 Resolved, 7 Closed, 8 Canceled"
     )
+    hold_reason: Optional[str] = Field(
+        None,
+        description="On hold reason code, required when state is 3 (On Hold): 1 Awaiting Caller, "
+        "3 Awaiting Problem, 4 Awaiting Vendor, 5 Awaiting Change",
+    )
     channel: Optional[str] = Field(
         None, description="Channel / contact type, e.g. email, phone, chat, self-service, walk-in"
     )
@@ -97,6 +102,9 @@ class ListIncidentsParams(BaseModel):
     offset: int = Field(0, description="Offset for pagination")
     state: Optional[str] = Field(None, description="Filter by incident state")
     assigned_to: Optional[str] = Field(None, description="Filter by assigned user")
+    caller_id: Optional[str] = Field(
+        None, description="Filter by caller (sys_id of the user who reported the incident)"
+    )
     category: Optional[str] = Field(None, description="Filter by category")
     urgency: Optional[str] = Field(None, description="Filter by urgency (1 High, 2 Medium, 3 Low)")
     severity: Optional[str] = Field(None, description="Filter by severity (1 High, 2 Medium, 3 Low)")
@@ -228,6 +236,7 @@ def _format_incident(incident_data: dict) -> dict:
     state_value, state_display = _field(incident_data.get("state"))
     priority_value, priority_display = _field(incident_data.get("priority"))
     _, assigned_to = _field(incident_data.get("assigned_to"))
+    caller_value, caller_display = _field(incident_data.get("caller_id"))
 
     return {
         "sys_id": _field(incident_data.get("sys_id"))[0],
@@ -243,6 +252,10 @@ def _format_incident(incident_data: dict) -> dict:
         "subcategory": _field(incident_data.get("subcategory"))[0],
         "created_on": _field(incident_data.get("sys_created_on"))[0],
         "updated_on": _field(incident_data.get("sys_updated_on"))[0],
+        "caller_id": caller_value,
+        "caller_display": caller_display,
+        "opened_at": _field(incident_data.get("opened_at"))[0],
+        "contact_type": _field(incident_data.get("contact_type"))[0],
     }
 
 
@@ -442,6 +455,8 @@ def update_incident(
         data["description"] = params.description
     if params.state:
         data["state"] = params.state
+    if params.hold_reason:
+        data["hold_reason"] = params.hold_reason
     if params.channel:
         data["contact_type"] = params.channel
     if params.category:
@@ -657,6 +672,8 @@ def list_incidents(
         filters.append(f"state={params.state}")
     if params.assigned_to:
         filters.append(f"assigned_to={params.assigned_to}")
+    if params.caller_id:
+        filters.append(f"caller_id={params.caller_id}")
     if params.category:
         filters.append(f"category={params.category}")
     if params.urgency:
