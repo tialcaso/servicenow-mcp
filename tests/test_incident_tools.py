@@ -13,6 +13,7 @@ from servicenow_mcp.tools.incident_tools import (
     ListIncidentsParams,
     ReopenIncidentParams,
     ResolveIncidentParams,
+    UpdateIncidentParams,
     close_incident,
     create_incident,
     delete_incident,
@@ -21,6 +22,7 @@ from servicenow_mcp.tools.incident_tools import (
     list_incidents,
     reopen_incident,
     resolve_incident,
+    update_incident,
 )
 from servicenow_mcp.utils.config import ServerConfig, AuthConfig, AuthType, BasicAuthConfig
 from servicenow_mcp.auth.auth_manager import AuthManager
@@ -334,6 +336,31 @@ class TestIncidentTools(unittest.TestCase):
                          "category", "subcategory", "created_on", "updated_on"):
             self.assertIn(existing, incident)
 
+
+    @patch('requests.put')
+    def test_update_incident_puts_on_hold_with_reason(self, mock_put):
+        """On Hold needs a hold_reason; it is sent alongside the state."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": {"sys_id": SYS_ID, "number": "INC0010001"}}
+        mock_put.return_value = mock_response
+
+        result = update_incident(self.config, self.auth_manager,
+                                 UpdateIncidentParams(incident_id=SYS_ID, state="3", hold_reason="1"))
+
+        self.assertTrue(result.success)
+        self.assertEqual(mock_put.call_args[1]["json"], {"state": "3", "hold_reason": "1"})
+
+    @patch('requests.put')
+    def test_update_incident_without_hold_reason_sends_none(self, mock_put):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": {"sys_id": SYS_ID, "number": "INC0010001"}}
+        mock_put.return_value = mock_response
+
+        update_incident(self.config, self.auth_manager, UpdateIncidentParams(incident_id=SYS_ID, state="2"))
+
+        self.assertNotIn("hold_reason", mock_put.call_args[1]["json"])
 
 if __name__ == '__main__':
     unittest.main()

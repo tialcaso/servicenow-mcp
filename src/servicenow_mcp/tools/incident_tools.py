@@ -53,6 +53,11 @@ class UpdateIncidentParams(BaseModel):
     state: Optional[str] = Field(
         None, description="State code: 1 New, 2 In Progress, 3 On Hold, 6 Resolved, 7 Closed, 8 Canceled"
     )
+    hold_reason: Optional[str] = Field(
+        None,
+        description="On hold reason code, required when state is 3 (On Hold): 1 Awaiting Caller, "
+        "3 Awaiting Problem, 4 Awaiting Vendor, 5 Awaiting Change",
+    )
     channel: Optional[str] = Field(
         None, description="Channel / contact type, e.g. email, phone, chat, self-service, walk-in"
     )
@@ -450,6 +455,8 @@ def update_incident(
         data["description"] = params.description
     if params.state:
         data["state"] = params.state
+    if params.hold_reason:
+        data["hold_reason"] = params.hold_reason
     if params.channel:
         data["contact_type"] = params.channel
     if params.category:
