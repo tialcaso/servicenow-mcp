@@ -325,7 +325,7 @@ The default `config/tool_packages.yaml` includes the following role-based packag
 
 1. **create_user** - Create a new user in ServiceNow
 2. **update_user** - Update an existing user in ServiceNow
-3. **get_user** - Get a specific user by ID, username, or email
+3. **get_user** - Get a specific user by ID, username, email, or employee number
 4. **list_users** - List users with filtering options
 5. **create_group** - Create a new group in ServiceNow
 6. **update_group** - Update an existing group in ServiceNow
