@@ -373,6 +373,12 @@ from servicenow_mcp.tools.project_tools import (
     update_project as update_project_tool,
     list_projects as list_projects_tool,
 )
+from servicenow_mcp.tools.journal_tools import (
+    ListJournalEntriesParams,
+)
+from servicenow_mcp.tools.journal_tools import (
+    list_journal_entries as list_journal_entries_tool,
+)
 
 # Define a type alias for the Pydantic models or dataclasses used for params
 ParamsModel = Type[Any]  # Use Type[Any] for broader compatibility initially
@@ -1051,6 +1057,13 @@ def get_tool_definitions(
             str,  # Expects JSON string
             "List projects from ServiceNow",
             "json",  # Tool returns list/dict
+        ),
+        "list_journal_entries": (
+            list_journal_entries_tool,
+            ListJournalEntriesParams,
+            str,
+            "List the journal entries (comments or work notes) of a record, newest first",
+            "json",
         ),
     }
     return tool_definitions

@@ -232,6 +232,10 @@ The default `config/tool_packages.yaml` includes the following role-based packag
 4. **resolve_incident** - Resolve an incident in ServiceNow
 5. **list_incidents** - List incidents from ServiceNow
 
+#### Journal Tools
+
+1. **list_journal_entries** - List the additional comments or work notes of any record (e.g. an incident or a requested item), newest first
+
 #### Service Catalog Tools
 
 1. **list_catalog_items** - List service catalog items from ServiceNow
