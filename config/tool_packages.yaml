@@ -26,6 +26,12 @@ service_desk:
   # Knowledge Lookup
   - get_article
   - list_articles
+  # Journal and Requested Items
+  - list_journal_entries
+  - list_requested_items
+  - get_requested_item
+  - order_catalog_item
+  - add_journal_entry
 
 catalog_builder:
   # Core Catalog
@@ -246,3 +252,9 @@ full:
   - create_project
   - update_project
   - list_projects
+  # Journal and Requested Items
+  - list_journal_entries
+  - list_requested_items
+  - get_requested_item
+  - order_catalog_item
+  - add_journal_entry

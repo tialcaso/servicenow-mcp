@@ -373,6 +373,36 @@ from servicenow_mcp.tools.project_tools import (
     update_project as update_project_tool,
     list_projects as list_projects_tool,
 )
+from servicenow_mcp.tools.journal_tools import (
+    ListJournalEntriesParams,
+)
+from servicenow_mcp.tools.journal_tools import (
+    list_journal_entries as list_journal_entries_tool,
+)
+from servicenow_mcp.tools.request_tools import (
+    ListRequestedItemsParams,
+)
+from servicenow_mcp.tools.request_tools import (
+    list_requested_items as list_requested_items_tool,
+)
+from servicenow_mcp.tools.request_tools import (
+    GetRequestedItemParams,
+)
+from servicenow_mcp.tools.request_tools import (
+    get_requested_item as get_requested_item_tool,
+)
+from servicenow_mcp.tools.request_tools import (
+    OrderCatalogItemParams,
+)
+from servicenow_mcp.tools.request_tools import (
+    order_catalog_item as order_catalog_item_tool,
+)
+from servicenow_mcp.tools.journal_tools import (
+    AddJournalEntryParams,
+)
+from servicenow_mcp.tools.journal_tools import (
+    add_journal_entry as add_journal_entry_tool,
+)
 
 # Define a type alias for the Pydantic models or dataclasses used for params
 ParamsModel = Type[Any]  # Use Type[Any] for broader compatibility initially
@@ -1051,6 +1081,41 @@ def get_tool_definitions(
             str,  # Expects JSON string
             "List projects from ServiceNow",
             "json",  # Tool returns list/dict
+        ),
+        "list_journal_entries": (
+            list_journal_entries_tool,
+            ListJournalEntriesParams,
+            str,
+            "List the journal entries (comments or work notes) of a record, newest first",
+            "json",
+        ),
+        "list_requested_items": (
+            list_requested_items_tool,
+            ListRequestedItemsParams,
+            str,
+            "List service catalog requested items (RITM), newest first",
+            "json",
+        ),
+        "get_requested_item": (
+            get_requested_item_tool,
+            GetRequestedItemParams,
+            str,
+            "Get a single requested item (RITM) by number or sys_id",
+            "json_dict",
+        ),
+        "order_catalog_item": (
+            order_catalog_item_tool,
+            OrderCatalogItemParams,
+            str,
+            "Order a service catalog item for a user and return the request (REQ) and requested item (RITM)",
+            "str",
+        ),
+        "add_journal_entry": (
+            add_journal_entry_tool,
+            AddJournalEntryParams,
+            str,
+            "Add a work note or an additional comment to an incident or a requested item",
+            "str",
         ),
     }
     return tool_definitions

@@ -113,6 +113,15 @@ from servicenow_mcp.tools.project_tools import (
     update_project,
     list_projects,
 )
+from servicenow_mcp.tools.journal_tools import (
+    add_journal_entry,
+    list_journal_entries,
+)
+from servicenow_mcp.tools.request_tools import (
+    order_catalog_item,
+    get_requested_item,
+    list_requested_items,
+)
 # from servicenow_mcp.tools.problem_tools import create_problem, update_problem
 # from servicenow_mcp.tools.request_tools import create_request, update_request
 
@@ -223,6 +232,11 @@ __all__ = [
     "update_project",
     "list_projects",
 
+    "list_journal_entries",
+    "list_requested_items",
+    "get_requested_item",
+    "order_catalog_item",
+    "add_journal_entry",
     
     # Future tools
     # "create_problem",
