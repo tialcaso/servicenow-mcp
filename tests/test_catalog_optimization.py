@@ -40,7 +40,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         self.auth_manager = MagicMock(spec=AuthManager)
         self.auth_manager.get_headers.return_value = {"Authorization": "Basic YWRtaW46cGFzc3dvcmQ="}
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_get_inactive_items(self, mock_get):
         """Test getting inactive catalog items."""
         # Mock the response from ServiceNow
@@ -76,7 +76,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         args, kwargs = mock_get.call_args
         self.assertEqual(kwargs["params"]["sysparm_query"], "active=false")
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_get_inactive_items_with_category(self, mock_get):
         """Test getting inactive catalog items filtered by category."""
         # Mock the response from ServiceNow
@@ -105,7 +105,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         args, kwargs = mock_get.call_args
         self.assertEqual(kwargs["params"]["sysparm_query"], "active=false^category=hardware")
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_get_inactive_items_error(self, mock_get):
         """Test error handling when getting inactive catalog items."""
         # Mock an error response
@@ -117,7 +117,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         # Verify the results
         self.assertEqual(result, [])
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     @patch("random.sample")
     @patch("random.randint")
     def test_get_low_usage_items(self, mock_randint, mock_sample, mock_get):
@@ -220,7 +220,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         self.assertEqual(high_abandonment_items[1]["cart_adds"], 20)
         self.assertEqual(high_abandonment_items[1]["orders"], 8)
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     @patch("random.sample")
     @patch("random.uniform")
     def test_get_slow_fulfillment_items(self, mock_uniform, mock_sample, mock_get):
@@ -276,7 +276,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         self.assertEqual(result[1]["avg_fulfillment_time"], 7.5)
         self.assertEqual(result[1]["avg_fulfillment_time_vs_catalog"], 3.0)  # 7.5 / 2.5 = 3.0
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_get_poor_description_items(self, mock_get):
         """Test getting catalog items with poor description quality."""
         # Mock the response from ServiceNow
@@ -473,7 +473,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         self.assertNotIn("slow_fulfillment", recommendation_types)
         self.assertNotIn("description_quality", recommendation_types)
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_update_catalog_item(self, mock_patch):
         """Test updating a catalog item."""
         # Mock the response from ServiceNow
@@ -511,7 +511,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
         self.assertEqual(args[0], "https://example.service-now.com/api/now/table/sc_cat_item/item1")
         self.assertEqual(kwargs["json"], {"short_description": "Updated laptop description"})
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_update_catalog_item_multiple_fields(self, mock_patch):
         """Test updating multiple fields of a catalog item."""
         # Mock the response from ServiceNow
@@ -557,7 +557,7 @@ class TestCatalogOptimizationTools(unittest.TestCase):
             "price": "1099.99",
         })
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_update_catalog_item_error(self, mock_patch):
         """Test error handling when updating a catalog item."""
         # Mock an error response

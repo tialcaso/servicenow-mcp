@@ -9,10 +9,10 @@ import logging
 import re
 from typing import Literal, Optional
 
-import requests
 from pydantic import BaseModel, Field
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils import http as requests
 from servicenow_mcp.utils.api import error_detail
 from servicenow_mcp.utils.config import ServerConfig
 

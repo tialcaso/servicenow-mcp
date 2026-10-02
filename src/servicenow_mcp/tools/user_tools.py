@@ -7,11 +7,11 @@ This module provides tools for managing users and groups in ServiceNow.
 import logging
 from typing import List, Optional, Tuple
 
-import requests
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from servicenow_mcp.auth.auth_manager import AuthManager
-from servicenow_mcp.utils.api import error_detail
+from servicenow_mcp.utils import http as requests
+from servicenow_mcp.utils.api import check_fields, error_detail, fields_param
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -77,6 +77,16 @@ class GetUserParams(BaseModel):
     user_name: Optional[str] = Field(None, description="Username of the user")
     email: Optional[str] = Field(None, description="Email address of the user")
     employee_number: Optional[str] = Field(None, description="Employee number of the user")
+    fields: Optional[List[str]] = Field(
+        None,
+        description="Only return these fields (sysparm_fields). Much faster on large tables: the instance "
+        "does not compute display values for the other fields. Default: all fields.",
+    )
+
+    @field_validator("fields")
+    @classmethod
+    def validate_fields(cls, v):
+        return check_fields(v)
 
 
 class ListUsersParams(BaseModel):
@@ -452,6 +462,7 @@ def get_user(
 
     query_params["sysparm_limit"] = "1"
     query_params["sysparm_display_value"] = "true"
+    query_params.update(fields_param(params.fields))
 
     # Make request
     try:

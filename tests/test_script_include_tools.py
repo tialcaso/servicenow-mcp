@@ -316,7 +316,7 @@ class TestScriptIncludeTools(unittest.TestCase):
         self.assertIn("Error creating script include", result.message)
 
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_get_script_include_by_sys_id(self, mock_get):
         """A raw 32-char sys_id is queried via the record URL (not a name query),
         and a string sys_created_by (display_value=true) is handled."""

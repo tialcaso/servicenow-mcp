@@ -311,7 +311,7 @@ class TestCatalogTools(unittest.TestCase):
         self.assertEqual(len(result["categories"]), 0)
         self.assertIn("Error", result["message"])
 
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.post")
     def test_create_catalog_category(self, mock_post):
         """Test creating a catalog category."""
         # Mock response
@@ -353,7 +353,7 @@ class TestCatalogTools(unittest.TestCase):
         self.assertEqual(kwargs["json"]["title"], "Test Category")
         self.assertEqual(kwargs["json"]["description"], "Test Description")
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_update_catalog_category(self, mock_patch):
         """Test updating a catalog category."""
         # Mock response
@@ -396,7 +396,7 @@ class TestCatalogTools(unittest.TestCase):
         self.assertEqual(kwargs["json"]["description"], "Updated Description")
         self.assertEqual(kwargs["json"]["order"], "200")
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_move_catalog_items(self, mock_patch):
         """Test moving catalog items."""
         # Mock response

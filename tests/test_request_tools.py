@@ -47,7 +47,7 @@ class TestRequestedItemTools(unittest.TestCase):
         self.auth_manager = MagicMock(spec=AuthManager)
         self.auth_manager.get_headers.return_value = {"Authorization": "Bearer FAKE_TOKEN"}
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_list_requested_items_for_a_user(self, mock_get):
         mock_get.return_value = _ok([RITM])
 
@@ -77,14 +77,14 @@ class TestRequestedItemTools(unittest.TestCase):
         self.assertEqual(args[1]["params"]["sysparm_limit"], 5)
         self.assertEqual(args[1]["params"]["sysparm_display_value"], "all")
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_list_requested_items_without_filters(self, mock_get):
         mock_get.return_value = _ok([])
         result = list_requested_items(self.config, self.auth_manager, ListRequestedItemsParams())
         self.assertEqual(result["requested_items"], [])
         self.assertEqual(mock_get.call_args[1]["params"]["sysparm_query"], "ORDERBYDESCsys_created_on")
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_get_requested_item_by_number(self, mock_get):
         mock_get.return_value = _ok([RITM])
         result = get_requested_item(self.config, self.auth_manager, GetRequestedItemParams(number="RITM0010001"))
@@ -92,27 +92,27 @@ class TestRequestedItemTools(unittest.TestCase):
         self.assertEqual(result["requested_item"]["sys_id"], SYS_ID)
         self.assertEqual(mock_get.call_args[1]["params"]["sysparm_query"], "number=RITM0010001")
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_get_requested_item_by_sys_id(self, mock_get):
         mock_get.return_value = _ok([RITM])
         get_requested_item(self.config, self.auth_manager, GetRequestedItemParams(number=SYS_ID))
         self.assertEqual(mock_get.call_args[1]["params"]["sysparm_query"], f"sys_id={SYS_ID}")
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_get_requested_item_not_found(self, mock_get):
         mock_get.return_value = _ok([])
         result = get_requested_item(self.config, self.auth_manager, GetRequestedItemParams(number="RITM0099999"))
         self.assertFalse(result["success"])
         self.assertIn("not found", result["message"])
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_get_requested_item_rejects_query_injection(self, mock_get):
         result = get_requested_item(self.config, self.auth_manager,
                                     GetRequestedItemParams(number="RITM1^ORnumberSTARTSWITHRITM"))
         self.assertFalse(result["success"])
         mock_get.assert_not_called()
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_list_requested_items_surfaces_servicenow_errors(self, mock_get):
         error_response = MagicMock(status_code=403, text="")
         error_response.json.return_value = {"error": {"message": "Insufficient rights"}}
@@ -133,8 +133,8 @@ class TestOrderCatalogItem(unittest.TestCase):
         self.auth_manager = MagicMock(spec=AuthManager)
         self.auth_manager.get_headers.return_value = {"Authorization": "Bearer FAKE_TOKEN"}
 
-    @patch("requests.get")
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.get")
+    @patch("servicenow_mcp.utils.http.post")
     def test_orders_and_returns_request_and_requested_item(self, mock_post, mock_get):
         order = MagicMock(status_code=200)
         order.json.return_value = {"result": {"sys_id": "dddd0000dddd0000dddd0000dddd0000",
@@ -162,7 +162,7 @@ class TestOrderCatalogItem(unittest.TestCase):
         self.assertEqual(mock_get.call_args[1]["params"]["sysparm_query"],
                          "request=dddd0000dddd0000dddd0000dddd0000")
 
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.post")
     def test_returns_servicenow_refusal_readably(self, mock_post):
         error_response = MagicMock(status_code=400, text="")
         error_response.json.return_value = {"error": {"message": "Mandatory Variables are required"}}
@@ -174,8 +174,8 @@ class TestOrderCatalogItem(unittest.TestCase):
         self.assertIn("HTTP 400", result.message)
         self.assertIn("Mandatory Variables are required", result.message)
 
-    @patch("requests.get")
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.get")
+    @patch("servicenow_mcp.utils.http.post")
     def test_order_without_a_visible_requested_item_still_succeeds(self, mock_post, mock_get):
         order = MagicMock(status_code=200)
         order.json.return_value = {"result": {"request_id": "dddd0000dddd0000dddd0000dddd0000",
@@ -190,7 +190,7 @@ class TestOrderCatalogItem(unittest.TestCase):
         self.assertIsNone(result.ritm_number)
         self.assertNotIn("sysparm_requested_for", mock_post.call_args[1]["json"])
 
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.post")
     def test_rejects_invalid_sys_ids_without_calling_the_api(self, mock_post):
         for params in (OrderCatalogItemParams(item_id="laptop"),
                        OrderCatalogItemParams(item_id=ITEM_ID, requested_for="jane.tester")):

@@ -7,10 +7,11 @@ This module provides tools for managing incidents in ServiceNow.
 import logging
 from typing import List, Optional, Tuple
 
-import requests
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from servicenow_mcp.auth.auth_manager import AuthManager
+from servicenow_mcp.utils import http as requests
+from servicenow_mcp.utils.api import check_fields, fields_param
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -97,7 +98,7 @@ class ResolveIncidentParams(BaseModel):
 
 class ListIncidentsParams(BaseModel):
     """Parameters for listing incidents."""
-    
+
     limit: int = Field(10, description="Maximum number of incidents to return")
     offset: int = Field(0, description="Offset for pagination")
     state: Optional[str] = Field(None, description="Filter by incident state")
@@ -133,6 +134,17 @@ class ListIncidentsParams(BaseModel):
         description="Only incidents whose last update/response was on/before this date "
         "('YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS').",
     )
+
+    fields: Optional[List[str]] = Field(
+        None,
+        description="Only return these fields (sysparm_fields). Much faster on large tables: the instance "
+        "does not compute display values for the other fields. Default: all fields.",
+    )
+
+    @field_validator("fields")
+    @classmethod
+    def validate_fields(cls, v):
+        return check_fields(v)
 
 
 class GetIncidentByNumberParams(BaseModel):
@@ -659,6 +671,7 @@ def list_incidents(
         "sysparm_offset": params.offset,
         "sysparm_display_value": "all",
         "sysparm_exclude_reference_link": "true",
+        **fields_param(params.fields),
     }
 
     # Add filters. The free-text OR goes first: ServiceNow groups `^OR` with the
