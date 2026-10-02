@@ -38,7 +38,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         self.auth_manager = MagicMock()
         self.auth_manager.get_headers.return_value = {"Content-Type": "application/json"}
 
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.post")
     def test_create_catalog_item_variable(self, mock_post):
         """Test create_catalog_item_variable function."""
         # Configure mock
@@ -84,7 +84,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["question_text"], "Test Variable")
         self.assertEqual(call_args[1]["json"]["mandatory"], "false")
 
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.post")
     def test_create_catalog_item_variable_with_optional_params(self, mock_post):
         """Test create_catalog_item_variable function with optional parameters."""
         # Configure mock
@@ -139,7 +139,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["description"], "Reference to a user")
         self.assertEqual(call_args[1]["json"]["order"], 100)
 
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.post")
     def test_create_catalog_item_variable_error(self, mock_post):
         """Test create_catalog_item_variable function with error."""
         # Configure mock to raise exception
@@ -160,7 +160,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertTrue("failed" in result.message.lower())
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_list_catalog_item_variables(self, mock_get):
         """Test list_catalog_item_variables function."""
         # Configure mock
@@ -216,7 +216,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         self.assertEqual(call_args[1]["params"]["sysparm_display_value"], "true")
         self.assertEqual(call_args[1]["params"]["sysparm_exclude_reference_link"], "false")
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_list_catalog_item_variables_with_pagination(self, mock_get):
         """Test list_catalog_item_variables function with pagination parameters."""
         # Configure mock
@@ -249,7 +249,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
             "sys_id,name,type,question_text,order,mandatory",
         )
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_list_catalog_item_variables_error(self, mock_get):
         """Test list_catalog_item_variables function with error."""
         # Configure mock to raise exception
@@ -267,7 +267,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertTrue("failed" in result.message.lower())
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_update_catalog_item_variable(self, mock_patch):
         """Test update_catalog_item_variable function."""
         # Configure mock
@@ -310,7 +310,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["mandatory"], "true")
         self.assertEqual(call_args[1]["json"]["help_text"], "This is help text")
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_update_catalog_item_variable_no_params(self, mock_patch):
         """Test update_catalog_item_variable function with no update parameters."""
         # Create test params with no updates (only ID)
@@ -328,7 +328,7 @@ class TestCatalogVariablesTools(unittest.TestCase):
         # Verify mock was not called
         mock_patch.assert_not_called()
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_update_catalog_item_variable_error(self, mock_patch):
         """Test update_catalog_item_variable function with error."""
         # Configure mock to raise exception

@@ -1,5 +1,8 @@
 """Small shared helpers for ServiceNow REST calls."""
 
+import re
+from typing import Dict, List, Optional
+
 import requests
 
 
@@ -28,3 +31,21 @@ def error_detail(exc: requests.RequestException) -> str:
     if resp.status_code == 401 or (resp.status_code == 403 and not detail):
         message += " (check credentials and that the account has the required role and ACLs)"
     return message
+
+
+_FIELD_NAME = re.compile(r"^[a-z0-9_]+(\.[a-z0-9_]+)*$")
+
+
+def check_fields(fields: Optional[List[str]]) -> Optional[List[str]]:
+    """Validate a ``fields`` list (pydantic validators): plain field names, optionally dot-walked."""
+    if fields is None:
+        return None
+    bad = [f for f in fields if not isinstance(f, str) or not _FIELD_NAME.match(f)]
+    if bad:
+        raise ValueError(f"Invalid field name(s): {bad}")
+    return fields
+
+
+def fields_param(fields: Optional[List[str]]) -> Dict[str, str]:
+    """``{"sysparm_fields": "a,b,c"}`` for a validated ``fields`` list, or ``{}`` (all fields)."""
+    return {"sysparm_fields": ",".join(fields)} if fields else {}

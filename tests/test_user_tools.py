@@ -55,7 +55,7 @@ class TestUserTools(unittest.TestCase):
         # Mock auth_manager.get_headers() method
         self.auth_manager.get_headers = MagicMock(return_value={"Authorization": "Basic YWRtaW46cGFzc3dvcmQ="})
 
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.post")
     def test_create_user(self, mock_post):
         """Test create_user function."""
         # Configure mock
@@ -98,7 +98,7 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["department"], "Radiology")
         self.assertEqual(call_args[1]["json"]["title"], "Doctor")
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_update_user(self, mock_patch):
         """Test update_user function."""
         # Configure mock
@@ -134,7 +134,7 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["manager"], "user456")
         self.assertEqual(call_args[1]["json"]["title"], "Senior Doctor")
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_get_user(self, mock_get):
         """Test get_user function."""
         # Configure mock
@@ -172,7 +172,7 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[0][0], f"{self.config.api_url}/table/sys_user")
         self.assertEqual(call_args[1]["params"]["sysparm_query"], "user_name=alice.radiology")
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_list_users(self, mock_get):
         """Test list_users function."""
         # Configure mock
@@ -214,7 +214,7 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[1]["params"]["sysparm_limit"], "10")
         self.assertIn("department=Radiology", call_args[1]["params"]["sysparm_query"])
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_list_groups(self, mock_get):
         """Test list_groups function."""
         # Configure mock
@@ -270,7 +270,7 @@ class TestUserTools(unittest.TestCase):
         self.assertIn("nameLIKE", call_args[1]["params"]["sysparm_query"])
         self.assertIn("descriptionLIKE", call_args[1]["params"]["sysparm_query"])
 
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.post")
     def test_create_group(self, mock_post):
         """Test create_group function."""
         # Configure mock
@@ -307,7 +307,7 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["description"], "Group for biomedical engineering staff")
         self.assertEqual(call_args[1]["json"]["manager"], "user456")
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_update_group(self, mock_patch):
         """Test update_group function."""
         # Configure mock
@@ -344,7 +344,7 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["manager"], "user789")
 
     @patch("servicenow_mcp.tools.user_tools.get_user")
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.post")
     def test_add_group_members(self, mock_post, mock_get_user):
         """Test add_group_members function."""
         # Configure mocks
@@ -382,8 +382,8 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(call_args[1]["json"]["user"], "user123")
 
     @patch("servicenow_mcp.tools.user_tools.get_user")
-    @patch("requests.get")
-    @patch("requests.delete")
+    @patch("servicenow_mcp.utils.http.get")
+    @patch("servicenow_mcp.utils.http.delete")
     def test_remove_group_members(self, mock_delete, mock_get, mock_get_user):
         """Test remove_group_members function."""
         # Configure mocks
@@ -442,7 +442,7 @@ class TestUserTools(unittest.TestCase):
         delete_call_args = mock_delete.call_args
         self.assertEqual(delete_call_args[0][0], f"{self.config.api_url}/table/sys_user_grmember/member123")
 
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.post")
     def test_create_user_sets_lock_and_reset(self, mock_post):
         """locked_out / password_needs_reset are written as string booleans."""
         resp = MagicMock()
@@ -457,8 +457,8 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(sent["locked_out"], "true")
         self.assertEqual(sent["password_needs_reset"], "true")
 
-    @patch("requests.patch")
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.patch")
+    @patch("servicenow_mcp.utils.http.get")
     def test_update_user_resolves_username(self, mock_get, mock_patch):
         """A non-sys_id user_id is resolved to a sys_id before PATCH."""
         lookup = MagicMock()
@@ -474,7 +474,7 @@ class TestUserTools(unittest.TestCase):
         self.assertIn("sys_user", mock_get.call_args[0][0])
         self.assertEqual(mock_patch.call_args[0][0], f"{self.config.api_url}/table/sys_user/{SYS_ID}")
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_set_password(self, mock_patch):
         resp = MagicMock()
         resp.raise_for_status = MagicMock()
@@ -492,8 +492,8 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(mock_patch.call_args[1]["params"]["sysparm_input_display_value"], "true")
         self.assertNotIn("manager", sent)
 
-    @patch("requests.patch")
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.patch")
+    @patch("servicenow_mcp.utils.http.post")
     def test_create_user_sets_password_in_isolated_request(self, mock_post, mock_patch):
         """Password is NOT in the create payload; it is set via a follow-up
         isolated PATCH with sysparm_input_display_value=true."""
@@ -516,7 +516,7 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(mock_patch.call_args[1]["json"]["user_password"], "Secret#1")
         self.assertEqual(mock_patch.call_args[1]["params"]["sysparm_input_display_value"], "true")
 
-    @patch("requests.delete")
+    @patch("servicenow_mcp.utils.http.delete")
     def test_delete_user(self, mock_delete):
         resp = MagicMock()
         resp.raise_for_status = MagicMock()
@@ -526,7 +526,7 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(mock_delete.call_args[0][0], f"{self.config.api_url}/table/sys_user/{SYS_ID}")
 
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_get_user_by_employee_number(self, mock_get):
         """employee_number is a lookup key, and the record comes back with its directory fields."""
         mock_response = MagicMock()
@@ -547,7 +547,7 @@ class TestUserTools(unittest.TestCase):
         for field in ("employee_number", "mobile_phone", "time_zone"):
             self.assertIn(field, result["user"])
 
-    @patch("requests.post")
+    @patch("servicenow_mcp.utils.http.post")
     def test_create_user_sets_employee_number_and_time_zone(self, mock_post):
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
@@ -562,7 +562,7 @@ class TestUserTools(unittest.TestCase):
         self.assertEqual(data["employee_number"], "E-0042")
         self.assertEqual(data["time_zone"], "Europe/Berlin")
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_update_user_sets_employee_number_and_time_zone(self, mock_patch):
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()

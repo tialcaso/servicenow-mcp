@@ -25,7 +25,7 @@ class TestListJournalEntries(unittest.TestCase):
         self.auth_manager = MagicMock(spec=AuthManager)
         self.auth_manager.get_headers.return_value = {"Authorization": "Bearer FAKE_TOKEN"}
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_lists_comments_newest_first(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -51,7 +51,7 @@ class TestListJournalEntries(unittest.TestCase):
         self.assertEqual(args[1]["params"]["sysparm_limit"], 5)
         self.assertEqual(args[1]["params"]["sysparm_display_value"], "all")
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_work_notes_of_a_requested_item(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -67,14 +67,14 @@ class TestListJournalEntries(unittest.TestCase):
         self.assertIn("element=work_notes", q)
         self.assertEqual(mock_get.call_args[1]["params"]["sysparm_limit"], 2)
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_rejects_a_non_sys_id_without_calling_the_api(self, mock_get):
         result = list_journal_entries(self.config, self.auth_manager,
                                       ListJournalEntriesParams(table="incident", sys_id="INC0010001^ORname=x"))
         self.assertFalse(result["success"])
         mock_get.assert_not_called()
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_rejects_an_invalid_table_name(self, mock_get):
         result = list_journal_entries(self.config, self.auth_manager,
                                       ListJournalEntriesParams(table="incident^ORname=x", sys_id=SYS_ID))
@@ -85,7 +85,7 @@ class TestListJournalEntries(unittest.TestCase):
         with self.assertRaises(ValueError):
             ListJournalEntriesParams(table="incident", sys_id=SYS_ID, element="description")
 
-    @patch("requests.get")
+    @patch("servicenow_mcp.utils.http.get")
     def test_surfaces_servicenow_errors(self, mock_get):
         error_response = MagicMock(status_code=403, text="")
         error_response.json.return_value = {"error": {"message": "Insufficient rights"}}
@@ -107,7 +107,7 @@ class TestAddJournalEntry(unittest.TestCase):
         self.auth_manager = MagicMock(spec=AuthManager)
         self.auth_manager.get_headers.return_value = {"Authorization": "Bearer FAKE_TOKEN"}
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_adds_a_work_note_to_a_requested_item(self, mock_patch):
         mock_patch.return_value.status_code = 200
         mock_patch.return_value.json.return_value = {"result": {"sys_id": SYS_ID, "number": "RITM0010001"}}
@@ -121,7 +121,7 @@ class TestAddJournalEntry(unittest.TestCase):
         self.assertEqual(mock_patch.call_args[0][0], f"{self.config.api_url}/table/sc_req_item/{SYS_ID}")
         self.assertEqual(mock_patch.call_args[1]["json"], {"work_notes": "Called the requester"})
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_adds_a_comment_to_an_incident(self, mock_patch):
         mock_patch.return_value.status_code = 200
         mock_patch.return_value.json.return_value = {"result": {"sys_id": SYS_ID, "number": "INC0010001"}}
@@ -136,14 +136,14 @@ class TestAddJournalEntry(unittest.TestCase):
         with self.assertRaises(ValueError):
             AddJournalEntryParams(table="sys_user", sys_id=SYS_ID, text="x")
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_rejects_a_non_sys_id(self, mock_patch):
         result = add_journal_entry(self.config, self.auth_manager,
                                    AddJournalEntryParams(table="incident", sys_id="INC0010001", text="x"))
         self.assertFalse(result.success)
         mock_patch.assert_not_called()
 
-    @patch("requests.patch")
+    @patch("servicenow_mcp.utils.http.patch")
     def test_surfaces_servicenow_errors(self, mock_patch):
         error_response = MagicMock(status_code=403, text="")
         error_response.json.return_value = {"error": {"message": "Insufficient rights"}}

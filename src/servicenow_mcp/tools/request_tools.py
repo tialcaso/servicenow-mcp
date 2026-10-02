@@ -7,13 +7,13 @@ and for ordering a catalog item through the Service Catalog API.
 
 import logging
 import re
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
-import requests
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from servicenow_mcp.auth.auth_manager import AuthManager
-from servicenow_mcp.utils.api import error_detail
+from servicenow_mcp.utils import http as requests
+from servicenow_mcp.utils.api import check_fields, error_detail, fields_param
 from servicenow_mcp.utils.config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,17 @@ class ListRequestedItemsParams(BaseModel):
         None,
         description="Only items created on/after this date ('YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS')",
     )
+
+    fields: Optional[List[str]] = Field(
+        None,
+        description="Only return these fields (sysparm_fields). Much faster on large tables: the instance "
+        "does not compute display values for the other fields. Default: all fields.",
+    )
+
+    @field_validator("fields")
+    @classmethod
+    def validate_fields(cls, v):
+        return check_fields(v)
 
 
 class OrderCatalogItemParams(BaseModel):
@@ -143,7 +154,8 @@ def list_requested_items(
     try:
         response = requests.get(
             f"{config.api_url}/table/sc_req_item",
-            params={**_READ_PARAMS, "sysparm_query": query, "sysparm_limit": params.limit,
+            params={**_READ_PARAMS, **fields_param(params.fields), "sysparm_query": query,
+                    "sysparm_limit": params.limit,
                     "sysparm_offset": params.offset},
             headers=auth_manager.get_headers(),
             timeout=config.timeout,
