@@ -79,6 +79,12 @@ class GetRequestedItemParams(BaseModel):
     number: str = Field(..., description="Requested item number (e.g. RITM0010001) or sys_id")
 
 
+class GetRequestedItemVariablesParams(BaseModel):
+    """Parameters for reading the answered variables (form fields) of a requested item."""
+
+    number: str = Field(..., description="Requested item number (e.g. RITM0010001) or sys_id")
+
+
 def _field(value):
     """``(raw_value, display_value)`` of a Table API field returned with sysparm_display_value=all."""
     if isinstance(value, dict):
@@ -97,6 +103,7 @@ def _format_requested_item(item: dict) -> dict:
         "sys_id": _field(item.get("sys_id"))[0],
         "number": _field(item.get("number"))[0],
         "short_description": _field(item.get("short_description"))[0],
+        "description": _field(item.get("description"))[0],
         "cat_item": cat_item,
         "cat_item_display": cat_item_display,
         "state": state,
@@ -213,6 +220,86 @@ def get_requested_item(
         return {"success": False, "message": f"Requested item not found: {params.number}"}
     item = _format_requested_item(result[0])
     return {"success": True, "message": f"Requested item {item['number']} found", "requested_item": item}
+
+
+# sc_item_option_mtom joins a requested item to its answered variables (sc_item_option), each pointing at the
+# variable definition (item_option_new): the label, type, form order and the "visible on summaries" flag.
+_VARIABLE_FIELDS = [
+    "sc_item_option.item_option_new.name",
+    "sc_item_option.item_option_new.question_text",
+    "sc_item_option.item_option_new.type",
+    "sc_item_option.item_option_new.order",
+    "sc_item_option.item_option_new.visible_summary",
+    "sc_item_option.value",
+]
+
+
+def _requested_item_sys_id(config: ServerConfig, auth_manager: AuthManager, number: str) -> Optional[str]:
+    if _is_sys_id(number):
+        return number
+    response = requests.get(
+        f"{config.api_url}/table/sc_req_item",
+        params={"sysparm_query": f"number={number}", "sysparm_fields": "sys_id", "sysparm_limit": 1},
+        headers=auth_manager.get_headers(),
+        timeout=config.timeout,
+    )
+    response.raise_for_status()
+    result = response.json().get("result", [])
+    return result[0].get("sys_id") if result else None
+
+
+def get_requested_item_variables(
+    config: ServerConfig,
+    auth_manager: AuthManager,
+    params: GetRequestedItemVariablesParams,
+) -> dict:
+    """
+    Read the answered variables of a requested item, in form order.
+
+    Each variable comes as ``name``, ``label`` (the question text), ``type`` (the item_option_new type code,
+    e.g. ``9`` for a date), ``order``, ``visible_summary`` (``True`` unless the definition hides it from
+    summaries) and ``value`` (the raw stored value; dates as ``YYYY-MM-DD``).
+
+    Args:
+        config: Server configuration.
+        auth_manager: Authentication manager.
+        params: Parameters identifying the requested item.
+
+    Returns:
+        Dictionary with the list of variables; empty when the item has none.
+    """
+    if not (_is_sys_id(params.number) or _NUMBER.match(params.number)):
+        return {"success": False, "message": f"Invalid requested item number: {params.number}", "variables": []}
+    try:
+        sys_id = _requested_item_sys_id(config, auth_manager, params.number)
+        if sys_id is None:
+            return {"success": False, "message": f"Requested item not found: {params.number}", "variables": []}
+        response = requests.get(
+            f"{config.api_url}/table/sc_item_option_mtom",
+            params={"sysparm_query": f"request_item={sys_id}^ORDERBYsc_item_option.item_option_new.order",
+                    "sysparm_fields": ",".join(_VARIABLE_FIELDS), "sysparm_exclude_reference_link": "true",
+                    "sysparm_limit": 200},
+            headers=auth_manager.get_headers(),
+            timeout=config.timeout,
+        )
+        response.raise_for_status()
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch requested item variables: {e}")
+        return {"success": False, "message": f"Failed to fetch requested item variables: {error_detail(e)}",
+                "variables": []}
+
+    variables = []
+    for row in response.json().get("result", []):
+        definition = {k.rsplit(".", 1)[-1]: _field(v)[0] for k, v in row.items() if "item_option_new." in k}
+        variables.append({
+            "name": definition.get("name"),
+            "label": definition.get("question_text") or definition.get("name"),
+            "type": definition.get("type"),
+            "order": definition.get("order"),
+            "visible_summary": str(definition.get("visible_summary", "true")).lower() != "false",
+            "value": _field(row.get("sc_item_option.value"))[0],
+        })
+    return {"success": True, "message": f"Found {len(variables)} variables", "variables": variables}
 
 
 def order_catalog_item(
