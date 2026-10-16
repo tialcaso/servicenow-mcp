@@ -8,9 +8,11 @@ import requests
 from servicenow_mcp.auth.auth_manager import AuthManager
 from servicenow_mcp.tools.request_tools import (
     GetRequestedItemParams,
+    GetRequestedItemVariablesParams,
     ListRequestedItemsParams,
     OrderCatalogItemParams,
     get_requested_item,
+    get_requested_item_variables,
     list_requested_items,
     order_catalog_item,
 )
@@ -29,7 +31,20 @@ RITM = {
     "opened_at": {"value": "2026-06-01 09:30:00", "display_value": "2026-06-01 02:30:00"},
     "requested_for": {"value": USER_ID, "display_value": "Jane Tester"},
     "request": {"value": "bbbb0000bbbb0000bbbb0000bbbb0000", "display_value": "REQ0010001"},
+    "description": {"value": "Laptop for a new starter.", "display_value": "Laptop for a new starter."},
 }
+
+
+def _variable(name, label, value, type_="6", order="100", visible="true"):
+    return {"sc_item_option.item_option_new.name": name, "sc_item_option.item_option_new.question_text": label,
+            "sc_item_option.item_option_new.type": type_, "sc_item_option.item_option_new.order": order,
+            "sc_item_option.item_option_new.visible_summary": visible, "sc_item_option.value": value}
+
+
+VARIABLES = [_variable("employee_name", "Employee name", "Jane Tester", order="100"),
+             _variable("start_date", "Start date", "2026-07-01", type_="9", order="200"),
+             _variable("internal_note", "Internal note", "ordered by the bot", order="300", visible="false"),
+             _variable("comments", "Comments", "", type_="2", order="400")]
 
 
 def _ok(result):
@@ -91,6 +106,52 @@ class TestRequestedItemTools(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["requested_item"]["sys_id"], SYS_ID)
         self.assertEqual(mock_get.call_args[1]["params"]["sysparm_query"], "number=RITM0010001")
+
+    @patch("servicenow_mcp.utils.http.get")
+    def test_get_requested_item_includes_the_description(self, mock_get):
+        mock_get.return_value = _ok([RITM])
+        result = get_requested_item(self.config, self.auth_manager, GetRequestedItemParams(number="RITM0010001"))
+        self.assertEqual(result["requested_item"]["description"], "Laptop for a new starter.")
+
+    @patch("servicenow_mcp.utils.http.get")
+    def test_get_requested_item_variables_in_form_order(self, mock_get):
+        mock_get.side_effect = [_ok([{"sys_id": SYS_ID}]), _ok(VARIABLES)]
+        result = get_requested_item_variables(self.config, self.auth_manager,
+                                              GetRequestedItemVariablesParams(number="RITM0010001"))
+        self.assertTrue(result["success"])
+        self.assertEqual([v["name"] for v in result["variables"]],
+                         ["employee_name", "start_date", "internal_note", "comments"])
+        self.assertEqual(result["variables"][0], {"name": "employee_name", "label": "Employee name", "type": "6",
+                                                  "order": "100", "visible_summary": True, "value": "Jane Tester"})
+        self.assertEqual(result["variables"][1]["type"], "9")
+        self.assertFalse(result["variables"][2]["visible_summary"])
+        self.assertEqual(result["variables"][3]["value"], "")
+        lookup, read = mock_get.call_args_list
+        self.assertEqual(lookup[1]["params"]["sysparm_query"], "number=RITM0010001")
+        self.assertEqual(read[1]["params"]["sysparm_query"],
+                         f"request_item={SYS_ID}^ORDERBYsc_item_option.item_option_new.order")
+        self.assertIn("sc_item_option.value", read[1]["params"]["sysparm_fields"])
+
+    @patch("servicenow_mcp.utils.http.get")
+    def test_get_requested_item_variables_by_sys_id_skips_the_lookup(self, mock_get):
+        mock_get.return_value = _ok([])
+        result = get_requested_item_variables(self.config, self.auth_manager,
+                                              GetRequestedItemVariablesParams(number=SYS_ID))
+        self.assertTrue(result["success"])
+        self.assertEqual(result["variables"], [])
+        self.assertEqual(mock_get.call_count, 1)
+
+    @patch("servicenow_mcp.utils.http.get")
+    def test_get_requested_item_variables_not_found_and_invalid(self, mock_get):
+        mock_get.return_value = _ok([])
+        missing = get_requested_item_variables(self.config, self.auth_manager,
+                                               GetRequestedItemVariablesParams(number="RITM0099999"))
+        self.assertFalse(missing["success"])
+        self.assertIn("not found", missing["message"])
+        bad = get_requested_item_variables(self.config, self.auth_manager,
+                                           GetRequestedItemVariablesParams(number="RITM1^ORnumberSTARTSWITHRITM"))
+        self.assertFalse(bad["success"])
+        self.assertEqual(mock_get.call_count, 1)
 
     @patch("servicenow_mcp.utils.http.get")
     def test_get_requested_item_by_sys_id(self, mock_get):
